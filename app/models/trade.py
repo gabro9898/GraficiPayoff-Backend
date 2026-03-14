@@ -1,6 +1,11 @@
+# ============================================================
+# FILE AGGIORNATO — sostituisce il file esistente
+# Percorso: app/models/trade.py
+# ============================================================
+
 import uuid
 from datetime import datetime, date, timezone
-from sqlalchemy import String, DateTime, Date, Float, Integer, Enum as SAEnum, ForeignKey
+from sqlalchemy import String, DateTime, Date, Float, Integer, Boolean, Enum as SAEnum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 import enum
@@ -50,6 +55,10 @@ class Trade(Base):
     underlying_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     implied_volatility: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # --- Leg state ---
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    frozen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # --- Trade metadata ---
     status: Mapped[TradeStatus] = mapped_column(
         SAEnum(TradeStatus), default=TradeStatus.OPEN, nullable=False
@@ -74,7 +83,6 @@ class Trade(Base):
 
     @property
     def pnl(self) -> float | None:
-        """Calculate P&L if trade is closed."""
         if self.close_premium is None:
             return None
         multiplier = 1 if self.direction == Direction.BUY else -1

@@ -1,3 +1,9 @@
+# ============================================================
+# FILE AGGIORNATO — sostituisce il file esistente
+# Percorso: app/repositories/strategy_repository.py
+# ============================================================
+
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.models.strategy import Strategy
 
@@ -24,6 +30,23 @@ class StrategyRepository:
             .order_by(Strategy.created_at.desc())
             .all()
         )
+
+    def find_all_by_account_id(self, account_id: str) -> list[Strategy]:
+        return (
+            self.db.query(Strategy)
+            .filter(Strategy.account_id == account_id)
+            .order_by(Strategy.number.asc())
+            .all()
+        )
+
+    def get_next_number(self, user_id: str) -> int:
+        """Prossimo numero progressivo per utente (001, 002, ...)."""
+        result = (
+            self.db.query(func.max(Strategy.number))
+            .filter(Strategy.user_id == user_id)
+            .scalar()
+        )
+        return (result or 0) + 1
 
     def create(self, strategy: Strategy) -> Strategy:
         self.db.add(strategy)

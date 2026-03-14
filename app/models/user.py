@@ -1,3 +1,8 @@
+# ============================================================
+# FILE AGGIORNATO — sostituisce il file esistente
+# Percorso: app/models/user.py
+# ============================================================
+
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import String, DateTime, Boolean
@@ -27,6 +32,9 @@ class User(Base):
     )
 
     # Relationships
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account", back_populates="user", cascade="all, delete-orphan"
+    )
     strategies: Mapped[list["Strategy"]] = relationship(
         "Strategy", back_populates="user", cascade="all, delete-orphan"
     )

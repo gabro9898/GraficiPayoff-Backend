@@ -1,17 +1,17 @@
 # ============================================================
-# FILE AGGIORNATO — sostituisce il file esistente
-# Percorso: app/models/strategy.py
+# NUOVO FILE
+# Percorso: app/models/account.py
 # ============================================================
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Text, Float, Integer, ForeignKey
+from sqlalchemy import String, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class Strategy(Base):
-    __tablename__ = "strategies"
+class Account(Base):
+    __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -19,20 +19,8 @@ class Strategy(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-
-    # Numero progressivo per utente (001, 002, ...)
-    number: Mapped[int] = mapped_column(Integer, nullable=False)
-
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ticker: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-
-    # Prezzo combo di esecuzione (fill price)
-    fill_price: Mapped[float | None] = mapped_column(Float, nullable=True)
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -43,8 +31,7 @@ class Strategy(Base):
     )
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="strategies")
-    account: Mapped["Account"] = relationship("Account", back_populates="strategies")
-    trades: Mapped[list["Trade"]] = relationship(
-        "Trade", back_populates="strategy", cascade="all, delete-orphan"
+    user: Mapped["User"] = relationship("User", back_populates="accounts")
+    strategies: Mapped[list["Strategy"]] = relationship(
+        "Strategy", back_populates="account", cascade="all, delete-orphan"
     )

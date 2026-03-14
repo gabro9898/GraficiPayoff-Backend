@@ -1,3 +1,8 @@
+# ============================================================
+# FILE AGGIORNATO — sostituisce il file esistente
+# Percorso: app/schemas/trade.py
+# ============================================================
+
 from datetime import datetime, date
 from pydantic import BaseModel, Field
 from app.models.trade import OptionType, Direction, TradeStatus
@@ -6,7 +11,6 @@ from app.models.trade import OptionType, Direction, TradeStatus
 # --- Request schemas ---
 
 class TradeCreateRequest(BaseModel):
-    # Basic option data
     ticker: str = Field(min_length=1, max_length=20)
     option_type: OptionType
     direction: Direction
@@ -14,18 +18,13 @@ class TradeCreateRequest(BaseModel):
     premium: float = Field(ge=0)
     quantity: int = Field(gt=0)
     expiry: date
-
-    # Greeks (optional)
+    enabled: bool = True
     delta: float | None = None
     gamma: float | None = None
     theta: float | None = None
     vega: float | None = None
-
-    # Market data (optional)
     underlying_price: float | None = Field(None, gt=0)
     implied_volatility: float | None = Field(None, ge=0)
-
-    # Metadata
     notes: str | None = Field(None, max_length=500)
 
 
@@ -37,6 +36,7 @@ class TradeUpdateRequest(BaseModel):
     premium: float | None = Field(None, ge=0)
     quantity: int | None = Field(None, gt=0)
     expiry: date | None = None
+    enabled: bool | None = None
     delta: float | None = None
     gamma: float | None = None
     theta: float | None = None
@@ -62,6 +62,8 @@ class TradeResponse(BaseModel):
     premium: float
     quantity: int
     expiry: date
+    enabled: bool
+    frozen: bool
     delta: float | None
     gamma: float | None
     theta: float | None

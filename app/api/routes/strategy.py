@@ -1,3 +1,8 @@
+# ============================================================
+# ★ BACKEND — FILE AGGIORNATO
+# Percorso: app/api/routes/strategy.py
+# ============================================================
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -7,6 +12,7 @@ from app.controllers.strategy_controller import StrategyController
 from app.schemas.strategy import (
     StrategyCreateRequest,
     StrategyUpdateRequest,
+    StrategyAddLegsRequest,
     StrategyResponse,
     StrategyWithTradesResponse,
 )
@@ -21,6 +27,16 @@ def get_all_strategies(
 ):
     controller = StrategyController(db)
     return controller.get_all(current_user)
+
+
+@router.get("/account/{account_id}", response_model=list[StrategyResponse])
+def get_strategies_by_account(
+    account_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = StrategyController(db)
+    return controller.get_all_by_account(account_id, current_user)
 
 
 @router.get("/{strategy_id}", response_model=StrategyResponse)
@@ -43,7 +59,7 @@ def get_strategy_with_trades(
     return controller.get_with_trades(strategy_id, current_user)
 
 
-@router.post("/", response_model=StrategyResponse, status_code=201)
+@router.post("/", response_model=StrategyWithTradesResponse, status_code=201)
 def create_strategy(
     data: StrategyCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -51,6 +67,17 @@ def create_strategy(
 ):
     controller = StrategyController(db)
     return controller.create(current_user, data)
+
+
+@router.post("/{strategy_id}/legs", response_model=StrategyWithTradesResponse)
+def add_legs_to_strategy(
+    strategy_id: str,
+    data: StrategyAddLegsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = StrategyController(db)
+    return controller.add_legs(strategy_id, current_user, data)
 
 
 @router.patch("/{strategy_id}", response_model=StrategyResponse)

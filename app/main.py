@@ -1,8 +1,14 @@
+# ============================================================
+# FILE AGGIORNATO — sostituisce il file esistente
+# Percorso: app/main.py
+# ============================================================
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base
 from app.api.routes import auth_router, user_router, strategy_router, trade_router
+from app.api.routes.account import router as account_router
 
 settings = get_settings()
 
@@ -28,6 +34,7 @@ def create_app() -> FastAPI:
     # Register routers
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(user_router, prefix="/api/v1")
+    app.include_router(account_router, prefix="/api/v1")
     app.include_router(strategy_router, prefix="/api/v1")
     app.include_router(trade_router, prefix="/api/v1")
 

@@ -1,9 +1,15 @@
+# ============================================================
+# ★ BACKEND — FILE AGGIORNATO
+# Percorso: app/controllers/strategy_controller.py
+# ============================================================
+
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.services.strategy_service import StrategyService
 from app.schemas.strategy import (
     StrategyCreateRequest,
     StrategyUpdateRequest,
+    StrategyAddLegsRequest,
     StrategyResponse,
     StrategyWithTradesResponse,
 )
@@ -17,6 +23,10 @@ class StrategyController:
         strategies = self.strategy_service.get_all_by_user(current_user.id)
         return [StrategyResponse.model_validate(s) for s in strategies]
 
+    def get_all_by_account(self, account_id: str, current_user: User) -> list[StrategyResponse]:
+        strategies = self.strategy_service.get_all_by_account(account_id, current_user.id)
+        return [StrategyResponse.model_validate(s) for s in strategies]
+
     def get_by_id(self, strategy_id: str, current_user: User) -> StrategyResponse:
         strategy = self.strategy_service.get_by_id(strategy_id, current_user.id)
         return StrategyResponse.model_validate(strategy)
@@ -25,13 +35,17 @@ class StrategyController:
         strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
         return StrategyWithTradesResponse.model_validate(strategy)
 
-    def create(self, current_user: User, data: StrategyCreateRequest) -> StrategyResponse:
+    def create(self, current_user: User, data: StrategyCreateRequest) -> StrategyWithTradesResponse:
         strategy = self.strategy_service.create(current_user.id, data)
-        return StrategyResponse.model_validate(strategy)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy.id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
 
-    def update(
-        self, strategy_id: str, current_user: User, data: StrategyUpdateRequest
-    ) -> StrategyResponse:
+    def add_legs(self, strategy_id: str, current_user: User, data: StrategyAddLegsRequest) -> StrategyWithTradesResponse:
+        self.strategy_service.add_legs(strategy_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    def update(self, strategy_id: str, current_user: User, data: StrategyUpdateRequest) -> StrategyResponse:
         strategy = self.strategy_service.update(strategy_id, current_user.id, data)
         return StrategyResponse.model_validate(strategy)
 

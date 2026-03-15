@@ -7,11 +7,9 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.services.strategy_service import StrategyService
 from app.schemas.strategy import (
-    StrategyCreateRequest,
-    StrategyUpdateRequest,
-    StrategyAddLegsRequest,
-    StrategyResponse,
-    StrategyWithTradesResponse,
+    StrategyCreateRequest, StrategyUpdateRequest,
+    StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
+    StrategyResponse, StrategyWithTradesResponse,
 )
 
 
@@ -26,6 +24,10 @@ class StrategyController:
     def get_all_by_account(self, account_id: str, current_user: User) -> list[StrategyResponse]:
         strategies = self.strategy_service.get_all_by_account(account_id, current_user.id)
         return [StrategyResponse.model_validate(s) for s in strategies]
+
+    def get_open_expired(self, current_user: User) -> list[StrategyWithTradesResponse]:
+        strategies = self.strategy_service.get_open_expired(current_user.id)
+        return [StrategyWithTradesResponse.model_validate(s) for s in strategies]
 
     def get_by_id(self, strategy_id: str, current_user: User) -> StrategyResponse:
         strategy = self.strategy_service.get_by_id(strategy_id, current_user.id)
@@ -44,6 +46,14 @@ class StrategyController:
         self.strategy_service.add_legs(strategy_id, current_user.id, data)
         strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
         return StrategyWithTradesResponse.model_validate(strategy)
+
+    def close(self, strategy_id: str, current_user: User, data: StrategyCloseRequest) -> StrategyResponse:
+        strategy = self.strategy_service.close(strategy_id, current_user.id, data)
+        return StrategyResponse.model_validate(strategy)
+
+    def settle(self, strategy_id: str, current_user: User, data: StrategySettleRequest) -> StrategyResponse:
+        strategy = self.strategy_service.settle(strategy_id, current_user.id, data)
+        return StrategyResponse.model_validate(strategy)
 
     def update(self, strategy_id: str, current_user: User, data: StrategyUpdateRequest) -> StrategyResponse:
         strategy = self.strategy_service.update(strategy_id, current_user.id, data)

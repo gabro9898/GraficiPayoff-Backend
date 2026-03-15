@@ -1,5 +1,5 @@
 # ============================================================
-# FILE AGGIORNATO — sostituisce il file esistente
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/strategy.py
 # ============================================================
 
@@ -22,16 +22,13 @@ class Strategy(Base):
     account_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True
     )
-
-    # Numero progressivo per utente (001, 002, ...)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
-
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     ticker: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-
-    # Prezzo combo di esecuzione (fill price)
     fill_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    settlement_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="OPEN", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -42,7 +39,6 @@ class Strategy(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships
     user: Mapped["User"] = relationship("User", back_populates="strategies")
     account: Mapped["Account"] = relationship("Account", back_populates="strategies")
     trades: Mapped[list["Trade"]] = relationship(

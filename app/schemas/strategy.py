@@ -8,10 +8,7 @@ from pydantic import BaseModel, Field
 from app.models.trade import OptionType, Direction
 
 
-# --- Leg sub-schema ---
-
 class StrategyLegInput(BaseModel):
-    """Singola leg quando si salva una strategia."""
     option_type: OptionType
     direction: Direction
     strike: float = Field(gt=0)
@@ -25,10 +22,7 @@ class StrategyLegInput(BaseModel):
     vega: float | None = None
 
 
-# --- Request schemas ---
-
 class StrategyCreateRequest(BaseModel):
-    """Salva una nuova strategia con tutte le legs."""
     account_id: str
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
@@ -38,9 +32,17 @@ class StrategyCreateRequest(BaseModel):
 
 
 class StrategyAddLegsRequest(BaseModel):
-    """Aggiunge nuove legs (correzioni) a una strategia esistente."""
     fill_price: float | None = None
     legs: list[StrategyLegInput] = Field(min_length=1)
+
+
+class StrategyCloseRequest(BaseModel):
+    close_premium: float
+
+
+class StrategySettleRequest(BaseModel):
+    """Settle una strategia scaduta con il prezzo di settlement."""
+    settlement_price: float = Field(gt=0)
 
 
 class StrategyUpdateRequest(BaseModel):
@@ -48,8 +50,6 @@ class StrategyUpdateRequest(BaseModel):
     description: str | None = None
     fill_price: float | None = None
 
-
-# --- Response schemas ---
 
 class StrategyResponse(BaseModel):
     id: str
@@ -60,6 +60,8 @@ class StrategyResponse(BaseModel):
     description: str | None
     ticker: str
     fill_price: float | None
+    settlement_price: float | None
+    status: str
     created_at: datetime
     updated_at: datetime
 

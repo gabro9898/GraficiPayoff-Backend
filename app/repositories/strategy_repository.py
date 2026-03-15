@@ -1,11 +1,13 @@
 # ============================================================
-# FILE AGGIORNATO — sostituisce il file esistente
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/repositories/strategy_repository.py
 # ============================================================
 
-from sqlalchemy import func
+from datetime import date
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 from app.models.strategy import Strategy
+from app.models.trade import Trade
 
 
 class StrategyRepository:
@@ -31,16 +33,45 @@ class StrategyRepository:
             .all()
         )
 
-    def find_all_by_account_id(self, account_id: str) -> list[Strategy]:
+    def find_all_by_account_id(
+        self, account_id: str, status: str | None = None, exclude_expired: bool = False
+    ) -> list[Strategy]:
+        q = self.db.query(Strategy).filter(Strategy.account_id == account_id)
+        if status:
+            q = q.filter(Strategy.status == status)
+        if exclude_expired:
+            max_expiry_sub = (
+                select(func.max(Trade.expiry))
+                .where(Trade.strategy_id == Strategy.id)
+                .correlate(Strategy)
+                .scalar_subquery()
+            )
+            q = q.filter(max_expiry_sub >= date.today())
+        return q.order_by(Strategy.number.asc()).all()
+
+    def find_open_expired_by_user(self, user_id: str) -> list[Strategy]:
+        """
+        Trova strategie OPEN dove TUTTI i trade sono scaduti (max expiry < oggi).
+        Queste devono essere settled automaticamente.
+        """
+        max_expiry_sub = (
+            select(func.max(Trade.expiry))
+            .where(Trade.strategy_id == Strategy.id)
+            .correlate(Strategy)
+            .scalar_subquery()
+        )
         return (
             self.db.query(Strategy)
-            .filter(Strategy.account_id == account_id)
-            .order_by(Strategy.number.asc())
+            .options(joinedload(Strategy.trades))
+            .filter(
+                Strategy.user_id == user_id,
+                Strategy.status == "OPEN",
+                max_expiry_sub < date.today(),
+            )
             .all()
         )
 
     def get_next_number(self, user_id: str) -> int:
-        """Prossimo numero progressivo per utente (001, 002, ...)."""
         result = (
             self.db.query(func.max(Strategy.number))
             .filter(Strategy.user_id == user_id)

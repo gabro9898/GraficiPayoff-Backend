@@ -3,12 +3,16 @@
 # Percorso: app/services/strategy_service.py
 # ============================================================
 
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.strategy import Strategy
-from app.models.trade import Trade
+from app.models.trade import Trade, TradeStatus, OptionType, Direction
 from app.repositories.strategy_repository import StrategyRepository
 from app.repositories.account_repository import AccountRepository
-from app.schemas.strategy import StrategyCreateRequest, StrategyUpdateRequest, StrategyAddLegsRequest
+from app.schemas.strategy import (
+    StrategyCreateRequest, StrategyUpdateRequest,
+    StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
+)
 from app.utils.exceptions import NotFoundException, ForbiddenException
 
 
@@ -30,7 +34,9 @@ class StrategyService:
 
     def get_all_by_account(self, account_id: str, user_id: str) -> list[Strategy]:
         self._verify_account_ownership(account_id, user_id)
-        return self.strategy_repo.find_all_by_account_id(account_id)
+        return self.strategy_repo.find_all_by_account_id(
+            account_id, status="OPEN", exclude_expired=True
+        )
 
     def get_by_id(self, strategy_id: str, user_id: str) -> Strategy:
         strategy = self.strategy_repo.find_by_id(strategy_id)
@@ -48,10 +54,11 @@ class StrategyService:
             raise ForbiddenException()
         return strategy
 
+    def get_open_expired(self, user_id: str) -> list[Strategy]:
+        """Ritorna strategie OPEN con tutti i trade scaduti — da settlarci."""
+        return self.strategy_repo.find_open_expired_by_user(user_id)
+
     def create(self, user_id: str, data: StrategyCreateRequest) -> Strategy:
-        """
-        Salva una nuova strategia con tutte le legs in una transazione.
-        """
         self._verify_account_ownership(data.account_id, user_id)
         next_number = self.strategy_repo.get_next_number(user_id)
 
@@ -63,6 +70,7 @@ class StrategyService:
             description=data.description,
             ticker=data.ticker,
             fill_price=data.fill_price,
+            status="OPEN",
         )
         self.db.add(strategy)
         self.db.flush()
@@ -91,10 +99,6 @@ class StrategyService:
         return strategy
 
     def add_legs(self, strategy_id: str, user_id: str, data: StrategyAddLegsRequest) -> Strategy:
-        """
-        Aggiunge nuove legs (correzioni/aggiustamenti) a una strategia esistente.
-        Ogni correzione viene salvata come frozen=True con il proprio fill_price.
-        """
         strategy = self.get_by_id(strategy_id, user_id)
 
         for leg in data.legs:
@@ -115,6 +119,51 @@ class StrategyService:
                 vega=leg.vega,
             )
             self.db.add(trade)
+
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy
+
+    def close(self, strategy_id: str, user_id: str, data: StrategyCloseRequest) -> Strategy:
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        now = datetime.now(timezone.utc)
+
+        strategy.status = "CLOSED"
+        for trade in strategy.trades:
+            if trade.status == TradeStatus.OPEN:
+                trade.status = TradeStatus.CLOSED
+                trade.close_premium = data.close_premium
+                trade.close_date = now
+
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy
+
+    def settle(self, strategy_id: str, user_id: str, data: StrategySettleRequest) -> Strategy:
+        """
+        Settle una strategia scaduta:
+        - Calcola il close_premium (valore intrinseco) per ogni trade
+        - Imposta strategy.status = 'CLOSED'
+        - Salva settlement_price
+        """
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        now = datetime.now(timezone.utc)
+        sp = data.settlement_price
+
+        strategy.status = "CLOSED"
+        strategy.settlement_price = sp
+
+        for trade in strategy.trades:
+            if trade.status == TradeStatus.OPEN:
+                # Calcola valore intrinseco a scadenza
+                if trade.option_type == OptionType.CALL:
+                    intrinsic = max(0.0, sp - trade.strike)
+                else:
+                    intrinsic = max(0.0, trade.strike - sp)
+
+                trade.close_premium = intrinsic
+                trade.close_date = now
+                trade.status = TradeStatus.CLOSED
 
         self.db.commit()
         self.db.refresh(strategy)

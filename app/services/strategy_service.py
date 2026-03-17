@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/services/strategy_service.py
-# Fix: passa implied_volatility quando crea Trade
+# Aggiunto: update_legs(), close_leg()
 # ============================================================
 
 from datetime import datetime, timezone
@@ -10,9 +10,11 @@ from app.models.strategy import Strategy
 from app.models.trade import Trade, TradeStatus, OptionType, Direction
 from app.repositories.strategy_repository import StrategyRepository
 from app.repositories.account_repository import AccountRepository
+from app.repositories.trade_repository import TradeRepository
 from app.schemas.strategy import (
     StrategyCreateRequest, StrategyUpdateRequest,
     StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
+    StrategyUpdateLegsRequest, StrategyCloseLegRequest,
 )
 from app.utils.exceptions import NotFoundException, ForbiddenException
 
@@ -22,6 +24,7 @@ class StrategyService:
         self.db = db
         self.strategy_repo = StrategyRepository(db)
         self.account_repo = AccountRepository(db)
+        self.trade_repo = TradeRepository(db)
 
     def _verify_account_ownership(self, account_id: str, user_id: str) -> None:
         account = self.account_repo.find_by_id(account_id)
@@ -56,11 +59,9 @@ class StrategyService:
         return strategy
 
     def get_open_expired(self, user_id: str) -> list[Strategy]:
-        """Ritorna strategie OPEN con tutti i trade scaduti — da settlarci."""
         return self.strategy_repo.find_open_expired_by_user(user_id)
 
     def _create_trade_from_leg(self, strategy_id: str, ticker: str, leg) -> Trade:
-        """★ Helper: crea un Trade da un StrategyLegInput, includendo implied_volatility."""
         return Trade(
             strategy_id=strategy_id,
             ticker=ticker,
@@ -76,7 +77,7 @@ class StrategyService:
             gamma=leg.gamma,
             theta=leg.theta,
             vega=leg.vega,
-            implied_volatility=leg.implied_volatility,  # ★ FIX
+            implied_volatility=leg.implied_volatility,
         )
 
     def create(self, user_id: str, data: StrategyCreateRequest) -> Strategy:
@@ -92,6 +93,7 @@ class StrategyService:
             ticker=data.ticker,
             fill_price=data.fill_price,
             status="OPEN",
+            realized_pnl=0.0,
         )
         self.db.add(strategy)
         self.db.flush()
@@ -110,6 +112,69 @@ class StrategyService:
         for leg in data.legs:
             trade = self._create_trade_from_leg(strategy.id, strategy.ticker, leg)
             self.db.add(trade)
+
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy
+
+    # ★ Feature 1: aggiornare legs esistenti (attivare legs spente, aggiornare premium)
+    def update_legs(self, strategy_id: str, user_id: str, data: StrategyUpdateLegsRequest) -> Strategy:
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+
+        trade_map = {t.id: t for t in strategy.trades}
+
+        for leg_update in data.legs:
+            trade = trade_map.get(leg_update.trade_id)
+            if not trade:
+                raise NotFoundException(f"Trade {leg_update.trade_id}")
+
+            if leg_update.enabled is not None:
+                trade.enabled = leg_update.enabled
+            if leg_update.premium is not None:
+                trade.premium = leg_update.premium
+            if leg_update.implied_volatility is not None:
+                trade.implied_volatility = leg_update.implied_volatility
+            if leg_update.delta is not None:
+                trade.delta = leg_update.delta
+            if leg_update.gamma is not None:
+                trade.gamma = leg_update.gamma
+            if leg_update.theta is not None:
+                trade.theta = leg_update.theta
+            if leg_update.vega is not None:
+                trade.vega = leg_update.vega
+
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy
+
+    # ★ Feature 2: chiudere una singola leg (adjustment) e accumulare realized PnL
+    def close_leg(self, strategy_id: str, user_id: str, data: StrategyCloseLegRequest) -> Strategy:
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        now = datetime.now(timezone.utc)
+
+        trade = None
+        for t in strategy.trades:
+            if t.id == data.trade_id:
+                trade = t
+                break
+
+        if not trade:
+            raise NotFoundException(f"Trade {data.trade_id}")
+
+        if trade.status == TradeStatus.CLOSED:
+            raise ForbiddenException()
+
+        # PnL realizzato:
+        # BUY: (close_premium - premium) × qty × 100
+        # SELL: (premium - close_premium) × qty × 100
+        multiplier = 1 if trade.direction == Direction.BUY else -1
+        leg_pnl = (data.close_premium - trade.premium) * multiplier * trade.quantity * 100
+
+        trade.status = TradeStatus.CLOSED
+        trade.close_premium = data.close_premium
+        trade.close_date = now
+
+        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + leg_pnl
 
         self.db.commit()
         self.db.refresh(strategy)

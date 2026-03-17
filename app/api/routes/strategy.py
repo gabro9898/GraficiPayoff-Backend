@@ -1,6 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/api/routes/strategy.py
+# Aggiunto: PATCH /{id}/legs (update legs), POST /{id}/close-leg
 # ============================================================
 
 from fastapi import APIRouter, Depends
@@ -12,6 +13,7 @@ from app.controllers.strategy_controller import StrategyController
 from app.schemas.strategy import (
     StrategyCreateRequest, StrategyUpdateRequest,
     StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
+    StrategyUpdateLegsRequest, StrategyCloseLegRequest,
     StrategyResponse, StrategyWithTradesResponse,
 )
 
@@ -32,7 +34,6 @@ def get_open_expired_strategies(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Ritorna strategie OPEN con tutti i trade scaduti — da settlarci."""
     controller = StrategyController(db)
     return controller.get_open_expired(current_user)
 
@@ -88,6 +89,30 @@ def add_legs_to_strategy(
     return controller.add_legs(strategy_id, current_user, data)
 
 
+# ★ Feature 1: aggiornare legs esistenti (attivare legs spente, aggiornare premium)
+@router.patch("/{strategy_id}/legs", response_model=StrategyWithTradesResponse)
+def update_legs_in_strategy(
+    strategy_id: str,
+    data: StrategyUpdateLegsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = StrategyController(db)
+    return controller.update_legs(strategy_id, current_user, data)
+
+
+# ★ Feature 2: chiudere una singola leg (adjustment con realized PnL)
+@router.post("/{strategy_id}/close-leg", response_model=StrategyWithTradesResponse)
+def close_leg_in_strategy(
+    strategy_id: str,
+    data: StrategyCloseLegRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = StrategyController(db)
+    return controller.close_leg(strategy_id, current_user, data)
+
+
 @router.post("/{strategy_id}/close", response_model=StrategyResponse)
 def close_strategy(
     strategy_id: str,
@@ -106,7 +131,6 @@ def settle_strategy(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Settle una strategia scaduta con il prezzo di settlement."""
     controller = StrategyController(db)
     return controller.settle(strategy_id, current_user, data)
 

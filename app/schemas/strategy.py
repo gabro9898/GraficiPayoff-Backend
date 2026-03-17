@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/strategy.py
-# Fix: implied_volatility in StrategyLegInput
+# Aggiunto: realized_pnl, StrategyCloseLegRequest, StrategyUpdateLegsRequest
 # ============================================================
 
 from datetime import datetime, date
@@ -21,7 +21,7 @@ class StrategyLegInput(BaseModel):
     gamma: float | None = None
     theta: float | None = None
     vega: float | None = None
-    implied_volatility: float | None = None  # ★ FIX
+    implied_volatility: float | None = None
 
 
 class StrategyCreateRequest(BaseModel):
@@ -43,7 +43,6 @@ class StrategyCloseRequest(BaseModel):
 
 
 class StrategySettleRequest(BaseModel):
-    """Settle una strategia scaduta con il prezzo di settlement."""
     settlement_price: float = Field(gt=0)
 
 
@@ -52,6 +51,31 @@ class StrategyUpdateRequest(BaseModel):
     description: str | None = None
     fill_price: float | None = None
 
+
+# ★ Feature 1: aggiornare legs esistenti (es. attivare legs spente)
+class StrategyUpdateLegRequest(BaseModel):
+    trade_id: str
+    enabled: bool | None = None
+    premium: float | None = Field(None, ge=0)
+    implied_volatility: float | None = None
+    delta: float | None = None
+    gamma: float | None = None
+    theta: float | None = None
+    vega: float | None = None
+
+
+class StrategyUpdateLegsRequest(BaseModel):
+    fill_price: float | None = None
+    legs: list[StrategyUpdateLegRequest] = Field(min_length=1)
+
+
+# ★ Feature 2: chiudere una singola leg (adjustment)
+class StrategyCloseLegRequest(BaseModel):
+    trade_id: str
+    close_premium: float = Field(ge=0)
+
+
+# --- Responses ---
 
 class StrategyResponse(BaseModel):
     id: str
@@ -64,6 +88,7 @@ class StrategyResponse(BaseModel):
     fill_price: float | None
     settlement_price: float | None
     status: str
+    realized_pnl: float
     created_at: datetime
     updated_at: datetime
 

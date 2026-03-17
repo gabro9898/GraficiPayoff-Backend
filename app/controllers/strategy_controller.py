@@ -1,6 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/controllers/strategy_controller.py
+# Aggiunto: update_legs(), close_leg()
 # ============================================================
 
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from app.services.strategy_service import StrategyService
 from app.schemas.strategy import (
     StrategyCreateRequest, StrategyUpdateRequest,
     StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
+    StrategyUpdateLegsRequest, StrategyCloseLegRequest,
     StrategyResponse, StrategyWithTradesResponse,
 )
 
@@ -44,6 +46,18 @@ class StrategyController:
 
     def add_legs(self, strategy_id: str, current_user: User, data: StrategyAddLegsRequest) -> StrategyWithTradesResponse:
         self.strategy_service.add_legs(strategy_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    # ★ Feature 1
+    def update_legs(self, strategy_id: str, current_user: User, data: StrategyUpdateLegsRequest) -> StrategyWithTradesResponse:
+        self.strategy_service.update_legs(strategy_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    # ★ Feature 2
+    def close_leg(self, strategy_id: str, current_user: User, data: StrategyCloseLegRequest) -> StrategyWithTradesResponse:
+        self.strategy_service.close_leg(strategy_id, current_user.id, data)
         strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
         return StrategyWithTradesResponse.model_validate(strategy)
 

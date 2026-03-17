@@ -1,6 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/services/strategy_service.py
+# Fix: passa implied_volatility quando crea Trade
 # ============================================================
 
 from datetime import datetime, timezone
@@ -58,6 +59,26 @@ class StrategyService:
         """Ritorna strategie OPEN con tutti i trade scaduti — da settlarci."""
         return self.strategy_repo.find_open_expired_by_user(user_id)
 
+    def _create_trade_from_leg(self, strategy_id: str, ticker: str, leg) -> Trade:
+        """★ Helper: crea un Trade da un StrategyLegInput, includendo implied_volatility."""
+        return Trade(
+            strategy_id=strategy_id,
+            ticker=ticker,
+            option_type=leg.option_type,
+            direction=leg.direction,
+            strike=leg.strike,
+            premium=leg.premium,
+            quantity=leg.quantity,
+            expiry=leg.expiry,
+            enabled=leg.enabled,
+            frozen=True,
+            delta=leg.delta,
+            gamma=leg.gamma,
+            theta=leg.theta,
+            vega=leg.vega,
+            implied_volatility=leg.implied_volatility,  # ★ FIX
+        )
+
     def create(self, user_id: str, data: StrategyCreateRequest) -> Strategy:
         self._verify_account_ownership(data.account_id, user_id)
         next_number = self.strategy_repo.get_next_number(user_id)
@@ -76,22 +97,7 @@ class StrategyService:
         self.db.flush()
 
         for leg in data.legs:
-            trade = Trade(
-                strategy_id=strategy.id,
-                ticker=data.ticker,
-                option_type=leg.option_type,
-                direction=leg.direction,
-                strike=leg.strike,
-                premium=leg.premium,
-                quantity=leg.quantity,
-                expiry=leg.expiry,
-                enabled=leg.enabled,
-                frozen=True,
-                delta=leg.delta,
-                gamma=leg.gamma,
-                theta=leg.theta,
-                vega=leg.vega,
-            )
+            trade = self._create_trade_from_leg(strategy.id, data.ticker, leg)
             self.db.add(trade)
 
         self.db.commit()
@@ -102,22 +108,7 @@ class StrategyService:
         strategy = self.get_by_id(strategy_id, user_id)
 
         for leg in data.legs:
-            trade = Trade(
-                strategy_id=strategy.id,
-                ticker=strategy.ticker,
-                option_type=leg.option_type,
-                direction=leg.direction,
-                strike=leg.strike,
-                premium=leg.premium,
-                quantity=leg.quantity,
-                expiry=leg.expiry,
-                enabled=leg.enabled,
-                frozen=True,
-                delta=leg.delta,
-                gamma=leg.gamma,
-                theta=leg.theta,
-                vega=leg.vega,
-            )
+            trade = self._create_trade_from_leg(strategy.id, strategy.ticker, leg)
             self.db.add(trade)
 
         self.db.commit()
@@ -140,12 +131,6 @@ class StrategyService:
         return strategy
 
     def settle(self, strategy_id: str, user_id: str, data: StrategySettleRequest) -> Strategy:
-        """
-        Settle una strategia scaduta:
-        - Calcola il close_premium (valore intrinseco) per ogni trade
-        - Imposta strategy.status = 'CLOSED'
-        - Salva settlement_price
-        """
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
         now = datetime.now(timezone.utc)
         sp = data.settlement_price
@@ -155,7 +140,6 @@ class StrategyService:
 
         for trade in strategy.trades:
             if trade.status == TradeStatus.OPEN:
-                # Calcola valore intrinseco a scadenza
                 if trade.option_type == OptionType.CALL:
                     intrinsic = max(0.0, sp - trade.strike)
                 else:

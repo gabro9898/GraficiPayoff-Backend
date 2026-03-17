@@ -1,6 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/strategy.py
+# Fix: implied_volatility in StrategyLegInput
 # ============================================================
 
 from datetime import datetime, date
@@ -20,6 +21,7 @@ class StrategyLegInput(BaseModel):
     gamma: float | None = None
     theta: float | None = None
     vega: float | None = None
+    implied_volatility: float | None = None  # ★ FIX
 
 
 class StrategyCreateRequest(BaseModel):

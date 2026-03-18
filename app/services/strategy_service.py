@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.strategy import Strategy
 from app.models.trade import Trade, TradeStatus, OptionType, Direction
+from app.models.underlying_position import UnderlyingPosition, UPDirection, UPStatus
 from app.repositories.strategy_repository import StrategyRepository
 from app.repositories.account_repository import AccountRepository
 from app.repositories.trade_repository import TradeRepository
@@ -15,6 +16,9 @@ from app.schemas.strategy import (
     StrategyCreateRequest, StrategyUpdateRequest,
     StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
     StrategyUpdateLegsRequest, StrategyCloseLegRequest,
+)
+from app.schemas.underlying_position import (
+    UnderlyingPositionCreateRequest, UnderlyingPositionCloseRequest,
 )
 from app.utils.exceptions import NotFoundException, ForbiddenException
 
@@ -175,6 +179,56 @@ class StrategyService:
         trade.close_date = now
 
         strategy.realized_pnl = (strategy.realized_pnl or 0.0) + leg_pnl
+
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy
+
+    # ★ Aggiungi posizione sottostante (stock/future/indice)
+    def add_underlying(self, strategy_id: str, user_id: str, data: UnderlyingPositionCreateRequest) -> Strategy:
+        strategy = self.get_by_id(strategy_id, user_id)
+
+        position = UnderlyingPosition(
+            strategy_id=strategy.id,
+            ticker=strategy.ticker,
+            direction=data.direction,
+            quantity=data.quantity,
+            entry_price=data.entry_price,
+            multiplier=data.multiplier,
+            status=UPStatus.OPEN,
+        )
+        self.db.add(position)
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy
+
+    # ★ Chiudi posizione sottostante (realized PnL)
+    def close_underlying(self, strategy_id: str, user_id: str, data: UnderlyingPositionCloseRequest) -> Strategy:
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        now = datetime.now(timezone.utc)
+
+        position = None
+        for p in strategy.underlying_positions:
+            if p.id == data.position_id:
+                position = p
+                break
+
+        if not position:
+            raise NotFoundException(f"UnderlyingPosition {data.position_id}")
+
+        if position.status == UPStatus.CLOSED:
+            raise ForbiddenException()
+
+        # PnL: BUY → (close - entry) × qty × multiplier
+        #      SELL → (entry - close) × qty × multiplier
+        mult = 1 if position.direction == UPDirection.BUY else -1
+        pos_pnl = (data.close_price - position.entry_price) * mult * position.quantity * position.multiplier
+
+        position.status = UPStatus.CLOSED
+        position.close_price = data.close_price
+        position.close_date = now
+
+        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + pos_pnl
 
         self.db.commit()
         self.db.refresh(strategy)

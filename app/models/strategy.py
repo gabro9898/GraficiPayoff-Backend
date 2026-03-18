@@ -46,3 +46,6 @@ class Strategy(Base):
     trades: Mapped[list["Trade"]] = relationship(
         "Trade", back_populates="strategy", cascade="all, delete-orphan"
     )
+    underlying_positions: Mapped[list["UnderlyingPosition"]] = relationship(
+        "UnderlyingPosition", back_populates="strategy", cascade="all, delete-orphan"
+    )

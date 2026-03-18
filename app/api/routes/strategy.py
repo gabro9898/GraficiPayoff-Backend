@@ -16,6 +16,9 @@ from app.schemas.strategy import (
     StrategyUpdateLegsRequest, StrategyCloseLegRequest,
     StrategyResponse, StrategyWithTradesResponse,
 )
+from app.schemas.underlying_position import (
+    UnderlyingPositionCreateRequest, UnderlyingPositionCloseRequest,
+)
 
 router = APIRouter(prefix="/strategies", tags=["Strategies"])
 
@@ -111,6 +114,29 @@ def close_leg_in_strategy(
 ):
     controller = StrategyController(db)
     return controller.close_leg(strategy_id, current_user, data)
+
+
+# ★ Underlying positions (stock/future/indice)
+@router.post("/{strategy_id}/underlying", response_model=StrategyWithTradesResponse)
+def add_underlying_to_strategy(
+    strategy_id: str,
+    data: UnderlyingPositionCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = StrategyController(db)
+    return controller.add_underlying(strategy_id, current_user, data)
+
+
+@router.post("/{strategy_id}/close-underlying", response_model=StrategyWithTradesResponse)
+def close_underlying_in_strategy(
+    strategy_id: str,
+    data: UnderlyingPositionCloseRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = StrategyController(db)
+    return controller.close_underlying(strategy_id, current_user, data)
 
 
 @router.post("/{strategy_id}/close", response_model=StrategyResponse)

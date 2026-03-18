@@ -1,6 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/repositories/strategy_repository.py
+# Aggiunto: joinedload underlying_positions
 # ============================================================
 
 from datetime import date
@@ -20,7 +21,7 @@ class StrategyRepository:
     def find_by_id_with_trades(self, strategy_id: str) -> Strategy | None:
         return (
             self.db.query(Strategy)
-            .options(joinedload(Strategy.trades))
+            .options(joinedload(Strategy.trades), joinedload(Strategy.underlying_positions))
             .filter(Strategy.id == strategy_id)
             .first()
         )
@@ -40,20 +41,18 @@ class StrategyRepository:
         if status:
             q = q.filter(Strategy.status == status)
         if exclude_expired:
+            from sqlalchemy import or_
             max_expiry_sub = (
                 select(func.max(Trade.expiry))
                 .where(Trade.strategy_id == Strategy.id)
                 .correlate(Strategy)
                 .scalar_subquery()
             )
-            q = q.filter(max_expiry_sub >= date.today())
+            # Include se: nessun trade (underlying-only) OPPURE max expiry >= oggi
+            q = q.filter(or_(max_expiry_sub.is_(None), max_expiry_sub >= date.today()))
         return q.order_by(Strategy.number.asc()).all()
 
     def find_open_expired_by_user(self, user_id: str) -> list[Strategy]:
-        """
-        Trova strategie OPEN dove TUTTI i trade sono scaduti (max expiry < oggi).
-        Queste devono essere settled automaticamente.
-        """
         max_expiry_sub = (
             select(func.max(Trade.expiry))
             .where(Trade.strategy_id == Strategy.id)
@@ -62,7 +61,7 @@ class StrategyRepository:
         )
         return (
             self.db.query(Strategy)
-            .options(joinedload(Strategy.trades))
+            .options(joinedload(Strategy.trades), joinedload(Strategy.underlying_positions))
             .filter(
                 Strategy.user_id == user_id,
                 Strategy.status == "OPEN",

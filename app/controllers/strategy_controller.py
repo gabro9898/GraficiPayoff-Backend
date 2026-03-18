@@ -13,6 +13,9 @@ from app.schemas.strategy import (
     StrategyUpdateLegsRequest, StrategyCloseLegRequest,
     StrategyResponse, StrategyWithTradesResponse,
 )
+from app.schemas.underlying_position import (
+    UnderlyingPositionCreateRequest, UnderlyingPositionCloseRequest,
+)
 
 
 class StrategyController:
@@ -58,6 +61,17 @@ class StrategyController:
     # ★ Feature 2
     def close_leg(self, strategy_id: str, current_user: User, data: StrategyCloseLegRequest) -> StrategyWithTradesResponse:
         self.strategy_service.close_leg(strategy_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    # ★ Underlying positions
+    def add_underlying(self, strategy_id: str, current_user: User, data: UnderlyingPositionCreateRequest) -> StrategyWithTradesResponse:
+        self.strategy_service.add_underlying(strategy_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    def close_underlying(self, strategy_id: str, current_user: User, data: UnderlyingPositionCloseRequest) -> StrategyWithTradesResponse:
+        self.strategy_service.close_underlying(strategy_id, current_user.id, data)
         strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
         return StrategyWithTradesResponse.model_validate(strategy)
 

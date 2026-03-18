@@ -30,7 +30,7 @@ class StrategyCreateRequest(BaseModel):
     description: str | None = None
     ticker: str = Field(min_length=1, max_length=20)
     fill_price: float | None = None
-    legs: list[StrategyLegInput] = Field(min_length=1)
+    legs: list[StrategyLegInput] = Field(default_factory=list)  # ★ può essere vuoto (solo underlying)
 
 
 class StrategyAddLegsRequest(BaseModel):
@@ -97,8 +97,10 @@ class StrategyResponse(BaseModel):
 
 class StrategyWithTradesResponse(StrategyResponse):
     trades: list["TradeResponse"] = []
+    underlying_positions: list["UnderlyingPositionResponse"] = []
 
 
 from app.schemas.trade import TradeResponse  # noqa: E402
+from app.schemas.underlying_position import UnderlyingPositionResponse  # noqa: E402
 
 StrategyWithTradesResponse.model_rebuild()

@@ -1,6 +1,7 @@
 # ============================================================
-# FILE AGGIORNATO — sostituisce il file esistente
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/main.py
+# Aggiunto: preference router
 # ============================================================
 
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from app.config import get_settings
 from app.database import engine, Base
 from app.api.routes import auth_router, user_router, strategy_router, trade_router
 from app.api.routes.account import router as account_router
+from app.api.routes.preference import router as preference_router
 
 settings = get_settings()
 
@@ -37,6 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(account_router, prefix="/api/v1")
     app.include_router(strategy_router, prefix="/api/v1")
     app.include_router(trade_router, prefix="/api/v1")
+    app.include_router(preference_router, prefix="/api/v1")
 
     @app.on_event("startup")
     def on_startup():

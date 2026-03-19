@@ -1,6 +1,7 @@
 # ============================================================
-# FILE AGGIORNATO — sostituisce il file esistente
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/user.py
+# Aggiunto: preferences relationship
 # ============================================================
 
 import uuid
@@ -37,6 +38,10 @@ class User(Base):
     )
     strategies: Mapped[list["Strategy"]] = relationship(
         "Strategy", back_populates="user", cascade="all, delete-orphan"
+    )
+    # ★ Preferences (one-to-one)
+    preferences: Mapped["UserPreference"] = relationship(
+        "UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
 
     @property

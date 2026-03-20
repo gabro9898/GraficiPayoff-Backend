@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/strategy.py
-# Aggiunto: realized_pnl, StrategyCloseLegRequest, StrategyUpdateLegsRequest
+# v2: + contract_multiplier
 # ============================================================
 
 from datetime import datetime, date
@@ -30,7 +30,8 @@ class StrategyCreateRequest(BaseModel):
     description: str | None = None
     ticker: str = Field(min_length=1, max_length=20)
     fill_price: float | None = None
-    legs: list[StrategyLegInput] = Field(default_factory=list)  # ★ può essere vuoto (solo underlying)
+    contract_multiplier: int = Field(default=1, ge=1)  # ★ nuovo
+    legs: list[StrategyLegInput] = Field(default_factory=list)
 
 
 class StrategyAddLegsRequest(BaseModel):
@@ -52,7 +53,6 @@ class StrategyUpdateRequest(BaseModel):
     fill_price: float | None = None
 
 
-# ★ Feature 1: aggiornare legs esistenti (es. attivare legs spente)
 class StrategyUpdateLegRequest(BaseModel):
     trade_id: str
     enabled: bool | None = None
@@ -69,7 +69,6 @@ class StrategyUpdateLegsRequest(BaseModel):
     legs: list[StrategyUpdateLegRequest] = Field(min_length=1)
 
 
-# ★ Feature 2: chiudere una singola leg (adjustment)
 class StrategyCloseLegRequest(BaseModel):
     trade_id: str
     close_premium: float = Field(ge=0)
@@ -89,6 +88,7 @@ class StrategyResponse(BaseModel):
     settlement_price: float | None
     status: str
     realized_pnl: float
+    contract_multiplier: int  # ★ nuovo
     created_at: datetime
     updated_at: datetime
 

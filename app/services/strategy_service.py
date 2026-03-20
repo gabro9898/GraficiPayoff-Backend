@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/services/strategy_service.py
-# Aggiunto: update_legs(), close_leg()
+# v2: + contract_multiplier nel create
 # ============================================================
 
 from datetime import datetime, timezone
@@ -96,6 +96,7 @@ class StrategyService:
             description=data.description,
             ticker=data.ticker,
             fill_price=data.fill_price,
+            contract_multiplier=data.contract_multiplier,  # ★ salva il moltiplicatore
             status="OPEN",
             realized_pnl=0.0,
         )
@@ -121,7 +122,6 @@ class StrategyService:
         self.db.refresh(strategy)
         return strategy
 
-    # ★ Feature 1: aggiornare legs esistenti (attivare legs spente, aggiornare premium)
     def update_legs(self, strategy_id: str, user_id: str, data: StrategyUpdateLegsRequest) -> Strategy:
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
 
@@ -151,7 +151,6 @@ class StrategyService:
         self.db.refresh(strategy)
         return strategy
 
-    # ★ Feature 2: chiudere una singola leg (adjustment) e accumulare realized PnL
     def close_leg(self, strategy_id: str, user_id: str, data: StrategyCloseLegRequest) -> Strategy:
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
         now = datetime.now(timezone.utc)
@@ -168,9 +167,6 @@ class StrategyService:
         if trade.status == TradeStatus.CLOSED:
             raise ForbiddenException()
 
-        # PnL realizzato:
-        # BUY: (close_premium - premium) × qty × 100
-        # SELL: (premium - close_premium) × qty × 100
         multiplier = 1 if trade.direction == Direction.BUY else -1
         leg_pnl = (data.close_premium - trade.premium) * multiplier * trade.quantity * 100
 
@@ -184,7 +180,6 @@ class StrategyService:
         self.db.refresh(strategy)
         return strategy
 
-    # ★ Aggiungi posizione sottostante (stock/future/indice)
     def add_underlying(self, strategy_id: str, user_id: str, data: UnderlyingPositionCreateRequest) -> Strategy:
         strategy = self.get_by_id(strategy_id, user_id)
 
@@ -202,7 +197,6 @@ class StrategyService:
         self.db.refresh(strategy)
         return strategy
 
-    # ★ Chiudi posizione sottostante (realized PnL)
     def close_underlying(self, strategy_id: str, user_id: str, data: UnderlyingPositionCloseRequest) -> Strategy:
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
         now = datetime.now(timezone.utc)
@@ -219,8 +213,6 @@ class StrategyService:
         if position.status == UPStatus.CLOSED:
             raise ForbiddenException()
 
-        # PnL: BUY → (close - entry) × qty × multiplier
-        #      SELL → (entry - close) × qty × multiplier
         mult = 1 if position.direction == UPDirection.BUY else -1
         pos_pnl = (data.close_price - position.entry_price) * mult * position.quantity * position.multiplier
 

@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/strategy.py
-# Aggiunto: realized_pnl
+# v2: + contract_multiplier
 # ============================================================
 
 import uuid
@@ -31,6 +31,8 @@ class Strategy(Base):
     settlement_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(10), default="OPEN", nullable=False)
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # ★ Numero di contratti (moltiplicatore quantità)
+    contract_multiplier: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

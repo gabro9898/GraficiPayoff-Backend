@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/strategy.py
-# v2: + contract_multiplier
+# v3: + earliest_expiry
 # ============================================================
 
 from datetime import datetime, date
@@ -30,7 +30,7 @@ class StrategyCreateRequest(BaseModel):
     description: str | None = None
     ticker: str = Field(min_length=1, max_length=20)
     fill_price: float | None = None
-    contract_multiplier: int = Field(default=1, ge=1)  # ★ nuovo
+    contract_multiplier: int = Field(default=1, ge=1)
     legs: list[StrategyLegInput] = Field(default_factory=list)
 
 
@@ -88,7 +88,8 @@ class StrategyResponse(BaseModel):
     settlement_price: float | None
     status: str
     realized_pnl: float
-    contract_multiplier: int  # ★ nuovo
+    contract_multiplier: int
+    earliest_expiry: date | None  # ★ nuovo
     created_at: datetime
     updated_at: datetime
 

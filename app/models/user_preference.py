@@ -1,6 +1,7 @@
 # ============================================================
-# ★ BACKEND — NUOVO FILE
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/user_preference.py
+# v2: + compare_mode
 # ============================================================
 
 import uuid
@@ -26,6 +27,7 @@ class UserPreference(Base):
     center_width: Mapped[float] = mapped_column(Float, default=280.0, nullable=False)
     chain_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     sidebar_collapsed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    compare_mode: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # ★ Payoff chart settings — JSON come testo
     payoff_settings: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/services/strategy_service.py
-# v2: + contract_multiplier nel create
+# v3: compute earliest_expiry on create/addLegs/closeLeg
 # ============================================================
 
 from datetime import datetime, timezone
@@ -36,6 +36,14 @@ class StrategyService:
             raise NotFoundException("Account")
         if account.user_id != user_id:
             raise ForbiddenException()
+
+    def _recompute_earliest_expiry(self, strategy: Strategy) -> None:
+        """Ricalcola earliest_expiry dai trades OPEN della strategia."""
+        open_expiries = [
+            t.expiry for t in strategy.trades
+            if t.status != TradeStatus.CLOSED and t.expiry is not None
+        ]
+        strategy.earliest_expiry = min(open_expiries) if open_expiries else None
 
     def get_all_by_user(self, user_id: str) -> list[Strategy]:
         return self.strategy_repo.find_all_by_user_id(user_id)
@@ -88,6 +96,11 @@ class StrategyService:
         self._verify_account_ownership(data.account_id, user_id)
         next_number = self.strategy_repo.get_next_number(user_id)
 
+        # ★ Calcola earliest_expiry dai legs
+        earliest = None
+        if data.legs:
+            earliest = min(leg.expiry for leg in data.legs)
+
         strategy = Strategy(
             user_id=user_id,
             account_id=data.account_id,
@@ -96,7 +109,8 @@ class StrategyService:
             description=data.description,
             ticker=data.ticker,
             fill_price=data.fill_price,
-            contract_multiplier=data.contract_multiplier,  # ★ salva il moltiplicatore
+            contract_multiplier=data.contract_multiplier,
+            earliest_expiry=earliest,
             status="OPEN",
             realized_pnl=0.0,
         )
@@ -112,11 +126,18 @@ class StrategyService:
         return strategy
 
     def add_legs(self, strategy_id: str, user_id: str, data: StrategyAddLegsRequest) -> Strategy:
-        strategy = self.get_by_id(strategy_id, user_id)
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
 
         for leg in data.legs:
             trade = self._create_trade_from_leg(strategy.id, strategy.ticker, leg)
             self.db.add(trade)
+
+        self.db.flush()
+
+        # ★ Ricalcola earliest_expiry includendo i nuovi legs
+        new_earliest = min(leg.expiry for leg in data.legs)
+        if strategy.earliest_expiry is None or new_earliest < strategy.earliest_expiry:
+            strategy.earliest_expiry = new_earliest
 
         self.db.commit()
         self.db.refresh(strategy)
@@ -175,6 +196,9 @@ class StrategyService:
         trade.close_date = now
 
         strategy.realized_pnl = (strategy.realized_pnl or 0.0) + leg_pnl
+
+        # ★ Ricalcola earliest_expiry dopo la chiusura
+        self._recompute_earliest_expiry(strategy)
 
         self.db.commit()
         self.db.refresh(strategy)

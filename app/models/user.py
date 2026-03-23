@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/user.py
-# Aggiunto: preferences relationship
+# v3: + broker_tokens relationship
 # ============================================================
 
 import uuid
@@ -39,9 +39,12 @@ class User(Base):
     strategies: Mapped[list["Strategy"]] = relationship(
         "Strategy", back_populates="user", cascade="all, delete-orphan"
     )
-    # ★ Preferences (one-to-one)
     preferences: Mapped["UserPreference"] = relationship(
         "UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    # ★ Token broker esterni (TastyTrade, ecc.)
+    broker_tokens: Mapped[list["BrokerToken"]] = relationship(
+        "BrokerToken", back_populates="user", cascade="all, delete-orphan"
     )
 
     @property

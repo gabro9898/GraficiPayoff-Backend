@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/user_preference.py
-# v3: + theme
+# v4: + broker (preferred broker id)
 # ============================================================
 
 import uuid
@@ -34,6 +34,9 @@ class UserPreference(Base):
 
     # ★ Tema UI (dark, light, etc.)
     theme: Mapped[str] = mapped_column(String(32), default="dark", nullable=False)
+
+    # ★ Broker preferito (ib, tastytrade, ecc.)
+    broker: Mapped[str] = mapped_column(String(32), default="ib", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

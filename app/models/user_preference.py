@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/user_preference.py
-# v2: + compare_mode
+# v3: + theme
 # ============================================================
 
 import uuid
@@ -31,6 +31,9 @@ class UserPreference(Base):
 
     # ★ Payoff chart settings — JSON come testo
     payoff_settings: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ★ Tema UI (dark, light, etc.)
+    theme: Mapped[str] = mapped_column(String(32), default="dark", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/user_preference.py
-# v2: + compare_mode
+# v3: + theme
 # ============================================================
 
 from datetime import datetime
@@ -16,6 +16,7 @@ class PreferenceUpdateRequest(BaseModel):
     sidebar_collapsed: bool | None = None
     compare_mode: bool | None = None
     payoff_settings: str | None = None  # JSON string
+    theme: str | None = Field(None, min_length=1, max_length=32)
 
 
 class PreferenceResponse(BaseModel):
@@ -28,6 +29,7 @@ class PreferenceResponse(BaseModel):
     sidebar_collapsed: bool
     compare_mode: bool
     payoff_settings: str | None
+    theme: str
     created_at: datetime
     updated_at: datetime
 

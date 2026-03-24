@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/repositories/strategy_repository.py
-# Aggiunto: joinedload underlying_positions
+# v2: + find_all_by_user_with_trades per Portfolio
 # ============================================================
 
 from datetime import date
@@ -30,6 +30,19 @@ class StrategyRepository:
         return (
             self.db.query(Strategy)
             .filter(Strategy.user_id == user_id)
+            .order_by(Strategy.created_at.desc())
+            .all()
+        )
+
+    # ★ Nuovo: tutte le strategie con trades per Portfolio
+    def find_all_by_user_with_trades(self, user_id: str) -> list[Strategy]:
+        return (
+            self.db.query(Strategy)
+            .filter(Strategy.user_id == user_id)
+            .options(
+                joinedload(Strategy.trades),
+                joinedload(Strategy.underlying_positions),
+            )
             .order_by(Strategy.created_at.desc())
             .all()
         )

@@ -1,10 +1,10 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/api/routes/strategy.py
-# Aggiunto: PATCH /{id}/legs (update legs), POST /{id}/close-leg
+# v2: + GET /portfolio (tutte le strategie con trades per Portfolio page)
 # ============================================================
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
@@ -30,6 +30,16 @@ def get_all_strategies(
 ):
     controller = StrategyController(db)
     return controller.get_all(current_user)
+
+
+# ★ Nuovo: ritorna TUTTE le strategie CON trades per la Portfolio page
+@router.get("/portfolio", response_model=list[StrategyWithTradesResponse])
+def get_portfolio(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = StrategyController(db)
+    return controller.get_all_with_trades(current_user)
 
 
 @router.get("/open-expired", response_model=list[StrategyWithTradesResponse])

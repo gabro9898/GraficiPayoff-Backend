@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/controllers/strategy_controller.py
-# Aggiunto: update_legs(), close_leg()
+# v2: + get_all_with_trades per Portfolio
 # ============================================================
 
 from sqlalchemy.orm import Session
@@ -25,6 +25,11 @@ class StrategyController:
     def get_all(self, current_user: User) -> list[StrategyResponse]:
         strategies = self.strategy_service.get_all_by_user(current_user.id)
         return [StrategyResponse.model_validate(s) for s in strategies]
+
+    # ★ Nuovo: tutte le strategie con trades per Portfolio
+    def get_all_with_trades(self, current_user: User) -> list[StrategyWithTradesResponse]:
+        strategies = self.strategy_service.get_all_by_user_with_trades(current_user.id)
+        return [StrategyWithTradesResponse.model_validate(s) for s in strategies]
 
     def get_all_by_account(self, account_id: str, current_user: User) -> list[StrategyResponse]:
         strategies = self.strategy_service.get_all_by_account(account_id, current_user.id)

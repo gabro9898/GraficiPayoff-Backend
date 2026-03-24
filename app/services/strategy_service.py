@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/services/strategy_service.py
-# v3: compute earliest_expiry on create/addLegs/closeLeg
+# v4: + get_all_by_user_with_trades per Portfolio
 # ============================================================
 
 from datetime import datetime, timezone
@@ -47,6 +47,10 @@ class StrategyService:
 
     def get_all_by_user(self, user_id: str) -> list[Strategy]:
         return self.strategy_repo.find_all_by_user_id(user_id)
+
+    # ★ Nuovo: tutte le strategie con trades per Portfolio
+    def get_all_by_user_with_trades(self, user_id: str) -> list[Strategy]:
+        return self.strategy_repo.find_all_by_user_with_trades(user_id)
 
     def get_all_by_account(self, account_id: str, user_id: str) -> list[Strategy]:
         self._verify_account_ownership(account_id, user_id)

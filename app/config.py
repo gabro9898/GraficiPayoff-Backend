@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "Options Payoff Tracker"
     DEBUG: bool = True
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173,app://."
 
     # ★ TastyTrade OAuth2
     TASTYTRADE_CLIENT_ID: str = ""

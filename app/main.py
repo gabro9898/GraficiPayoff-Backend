@@ -28,7 +28,7 @@ def create_app() -> FastAPI:
     # CORS - allow Electron frontend
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:5173", "app://.*"],
+        allow_origins=settings.ALLOWED_ORIGINS.split(","),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

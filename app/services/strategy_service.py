@@ -259,11 +259,24 @@ class StrategyService:
         now = datetime.now(timezone.utc)
 
         strategy.status = "CLOSED"
+
+        # Chiudi trades aperti
         for trade in strategy.trades:
             if trade.status == TradeStatus.OPEN:
                 trade.status = TradeStatus.CLOSED
                 trade.close_premium = data.close_premium
                 trade.close_date = now
+
+        # ★ Chiudi underlying positions aperte
+        for pos in strategy.underlying_positions:
+            if pos.status == UPStatus.OPEN:
+                close_price = data.underlying_close_price if data.underlying_close_price is not None else 0.0
+                mult = 1 if pos.direction == UPDirection.BUY else -1
+                pos_pnl = (close_price - pos.entry_price) * mult * pos.quantity * pos.multiplier
+                pos.status = UPStatus.CLOSED
+                pos.close_price = close_price
+                pos.close_date = now
+                strategy.realized_pnl = (strategy.realized_pnl or 0.0) + pos_pnl
 
         self.db.commit()
         self.db.refresh(strategy)

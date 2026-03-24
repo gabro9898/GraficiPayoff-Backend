@@ -41,7 +41,9 @@ class StrategyAddLegsRequest(BaseModel):
 
 class StrategyCloseRequest(BaseModel):
     close_premium: float
-
+    underlying_close_price: float | None = None
+    
+    
 
 class StrategySettleRequest(BaseModel):
     settlement_price: float = Field(gt=0)

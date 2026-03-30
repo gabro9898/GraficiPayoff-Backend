@@ -70,9 +70,10 @@ class StripeService:
 
         return {"status": "ok"}
 
-    def _handle_checkout_completed(self, session: dict):
-        user_id = session.get("metadata", {}).get("user_id")
-        plan = session.get("metadata", {}).get("plan", "monthly")
+    def _handle_checkout_completed(self, session):
+        metadata = session.metadata or {}
+        user_id = metadata.get("user_id") if isinstance(metadata, dict) else getattr(metadata, "user_id", None)
+        plan = metadata.get("plan", "monthly") if isinstance(metadata, dict) else getattr(metadata, "plan", "monthly")
 
         if not user_id:
             print("[Stripe] Webhook: user_id mancante nei metadata")

@@ -38,7 +38,7 @@ class StripeService:
         session = stripe.checkout.Session.create(
             customer_email=user.email,
             payment_method_types=["card"],
-            mode="subscription",
+            mode="payment",
             line_items=[{
                 "price": PRICE_MAP[price_id],
                 "quantity": 1,

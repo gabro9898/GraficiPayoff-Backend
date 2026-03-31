@@ -25,6 +25,9 @@ DURATION_MAP = {
     "annual": timedelta(days=365),
 }
 
+# L'utente può rinnovare fino a 7 giorni prima della scadenza
+RENEWAL_WINDOW_DAYS = 7
+
 
 class StripeService:
     def __init__(self, db: Session):
@@ -87,6 +90,8 @@ class StripeService:
         duration = DURATION_MAP.get(plan, timedelta(days=30))
         now = datetime.now(timezone.utc)
 
+        # Se ha un abbonamento ancora attivo, il nuovo parte dal giorno dopo la scadenza
+        # Se non ha abbonamento o è scaduto, parte da oggi
         if user.subscription_expiry and user.subscription_expiry > now:
             new_expiry = user.subscription_expiry + duration
         else:
@@ -94,4 +99,4 @@ class StripeService:
 
         self.user_repo.update(user, {"subscription_expiry": new_expiry})
 
-        print(f"[Stripe] Abbonamento aggiornato: user={user.email}, piano={plan}, scadenza={new_expiry.isoformat()}")
+        print(f"[Stripe] Abbonamento aggiornato: user={user.email}, piano={plan}, nuova scadenza={new_expiry.isoformat()}")

@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/api/routes/tastytrade.py
-# v3: OAuth popup (produzione) + refresh token manuale (sandbox)
+# v4: fix callback — code/state opzionali, gestione errore pulita
 # ============================================================
 
 from fastapi import APIRouter, Depends, Query
@@ -44,11 +44,36 @@ def get_auth_url(
 
 @router.get("/callback")
 async def oauth_callback(
-    code: str = Query(...),
-    state: str = Query(...),
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
     db: Session = Depends(get_db),
 ):
     """Callback OAuth2 (produzione). TastyTrade rimanda qui dopo login."""
+
+    # ★ Se code o state mancano, o TastyTrade ha mandato un errore
+    if error or not code or not state:
+        err_msg = error or "Autorizzazione negata o parametri mancanti"
+        return HTMLResponse(content=f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Errore autorizzazione</title></head>
+        <body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0f;color:#e4e4ee;">
+            <div style="text-align:center;">
+                <h2 style="color:#ff4757;">✗ Autorizzazione fallita</h2>
+                <p style="color:#8888a0;">{err_msg[:200]}</p>
+                <p style="color:#55556a;font-size:0.85rem;">Chiudi questa finestra e riprova.</p>
+                <script>
+                    if (window.opener) {{
+                        window.opener.postMessage({{ type: 'tastytrade-auth-error', error: '{err_msg[:100]}' }}, '*');
+                        setTimeout(() => window.close(), 3000);
+                    }}
+                </script>
+            </div>
+        </body>
+        </html>
+        """, status_code=200)
+
     service = TastyTradeService(db)
     try:
         result = await service.handle_callback(code, state)

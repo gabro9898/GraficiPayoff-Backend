@@ -1,7 +1,6 @@
 # ============================================================
-# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/strategy.py
-# v3: + earliest_expiry
+# v4: + trading_class su StrategyLegInput
 # ============================================================
 
 from datetime import datetime, date
@@ -17,6 +16,7 @@ class StrategyLegInput(BaseModel):
     quantity: int = Field(gt=0)
     expiry: date
     enabled: bool = True
+    trading_class: str | None = None  # ★ v4: SPXW, SPX, etc.
     delta: float | None = None
     gamma: float | None = None
     theta: float | None = None
@@ -42,8 +42,7 @@ class StrategyAddLegsRequest(BaseModel):
 class StrategyCloseRequest(BaseModel):
     close_premium: float
     underlying_close_price: float | None = None
-    
-    
+
 
 class StrategySettleRequest(BaseModel):
     settlement_price: float = Field(gt=0)
@@ -91,7 +90,7 @@ class StrategyResponse(BaseModel):
     status: str
     realized_pnl: float
     contract_multiplier: int
-    earliest_expiry: date | None  # ★ nuovo
+    earliest_expiry: date | None
     created_at: datetime
     updated_at: datetime
 

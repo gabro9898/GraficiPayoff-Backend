@@ -1,6 +1,6 @@
 # ============================================================
 # Percorso: app/services/strategy_service.py
-# v5: + trading_class on trade creation
+# v9: commissions (open+close) + underlying_expiry
 # ============================================================
 
 from datetime import datetime, timezone
@@ -74,7 +74,6 @@ class StrategyService:
     def get_open_expired(self, user_id: str) -> list[Strategy]:
         return self.strategy_repo.find_open_expired_by_user(user_id)
 
-    # ★ v5: include trading_class
     def _create_trade_from_leg(self, strategy_id: str, ticker: str, leg) -> Trade:
         return Trade(
             strategy_id=strategy_id,
@@ -88,6 +87,8 @@ class StrategyService:
             enabled=leg.enabled,
             frozen=True,
             trading_class=getattr(leg, 'trading_class', None),
+            commission=getattr(leg, 'commission', 0.0) or 0.0,
+            open_date=getattr(leg, 'open_date', None) or datetime.now(timezone.utc),
             delta=leg.delta,
             gamma=leg.gamma,
             theta=leg.theta,
@@ -101,11 +102,14 @@ class StrategyService:
         earliest = None
         if data.legs:
             earliest = min(leg.expiry for leg in data.legs)
+        total_open_commission = sum(getattr(leg, 'commission', 0.0) or 0.0 for leg in data.legs)
         strategy = Strategy(
             user_id=user_id, account_id=data.account_id, number=next_number,
             name=data.name, description=data.description, ticker=data.ticker,
             fill_price=data.fill_price, contract_multiplier=data.contract_multiplier,
-            earliest_expiry=earliest, status="OPEN", realized_pnl=0.0,
+            earliest_expiry=earliest, status="OPEN",
+            realized_pnl=-total_open_commission,
+            underlying_expiry=data.underlying_expiry,  # ★ v9: futures contract expiry
         )
         self.db.add(strategy)
         self.db.flush()
@@ -125,6 +129,8 @@ class StrategyService:
         new_earliest = min(leg.expiry for leg in data.legs)
         if strategy.earliest_expiry is None or new_earliest < strategy.earliest_expiry:
             strategy.earliest_expiry = new_earliest
+        added_commission = sum(getattr(leg, 'commission', 0.0) or 0.0 for leg in data.legs)
+        strategy.realized_pnl = (strategy.realized_pnl or 0.0) - added_commission
         self.db.commit()
         self.db.refresh(strategy)
         return strategy
@@ -160,7 +166,9 @@ class StrategyService:
         trade.status = TradeStatus.CLOSED
         trade.close_premium = data.close_premium
         trade.close_date = now
-        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + leg_pnl
+        trade.close_commission = getattr(data, 'close_commission', 0.0) or 0.0
+        close_comm = trade.close_commission
+        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + leg_pnl - close_comm
         self._recompute_earliest_expiry(strategy)
         self.db.commit()
         self.db.refresh(strategy)
@@ -168,12 +176,16 @@ class StrategyService:
 
     def add_underlying(self, strategy_id: str, user_id: str, data: UnderlyingPositionCreateRequest) -> Strategy:
         strategy = self.get_by_id(strategy_id, user_id)
+        commission = getattr(data, 'commission', 0.0) or 0.0
         position = UnderlyingPosition(
             strategy_id=strategy.id, ticker=strategy.ticker,
             direction=data.direction, quantity=data.quantity,
-            entry_price=data.entry_price, multiplier=data.multiplier, status=UPStatus.OPEN,
+            entry_price=data.entry_price, multiplier=data.multiplier,
+            commission=commission,
+            status=UPStatus.OPEN,
         )
         self.db.add(position)
+        strategy.realized_pnl = (strategy.realized_pnl or 0.0) - commission
         self.db.commit()
         self.db.refresh(strategy)
         return strategy
@@ -191,7 +203,9 @@ class StrategyService:
         position.status = UPStatus.CLOSED
         position.close_price = data.close_price
         position.close_date = now
-        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + pos_pnl
+        close_comm = getattr(data, 'close_commission', 0.0) or 0.0
+        position.close_commission = close_comm
+        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + pos_pnl - close_comm
         self.db.commit()
         self.db.refresh(strategy)
         return strategy

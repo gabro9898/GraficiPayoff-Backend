@@ -1,6 +1,6 @@
 # ============================================================
 # Percorso: app/schemas/strategy.py
-# v4: + trading_class su StrategyLegInput
+# v7: + underlying_expiry on create and response
 # ============================================================
 
 from datetime import datetime, date
@@ -16,7 +16,9 @@ class StrategyLegInput(BaseModel):
     quantity: int = Field(gt=0)
     expiry: date
     enabled: bool = True
-    trading_class: str | None = None  # ★ v4: SPXW, SPX, etc.
+    trading_class: str | None = None
+    commission: float = Field(default=0.0, ge=0)
+    open_date: datetime | None = None
     delta: float | None = None
     gamma: float | None = None
     theta: float | None = None
@@ -31,6 +33,7 @@ class StrategyCreateRequest(BaseModel):
     ticker: str = Field(min_length=1, max_length=20)
     fill_price: float | None = None
     contract_multiplier: int = Field(default=1, ge=1)
+    underlying_expiry: date | None = None  # ★ v7: futures contract expiry
     legs: list[StrategyLegInput] = Field(default_factory=list)
 
 
@@ -73,6 +76,7 @@ class StrategyUpdateLegsRequest(BaseModel):
 class StrategyCloseLegRequest(BaseModel):
     trade_id: str
     close_premium: float = Field(ge=0)
+    close_commission: float = Field(default=0.0, ge=0)
 
 
 # --- Responses ---
@@ -91,6 +95,7 @@ class StrategyResponse(BaseModel):
     realized_pnl: float
     contract_multiplier: int
     earliest_expiry: date | None
+    underlying_expiry: date | None  # ★ v7
     created_at: datetime
     updated_at: datetime
 

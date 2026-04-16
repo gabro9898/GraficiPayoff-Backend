@@ -1,6 +1,6 @@
 # ============================================================
-# NUOVO FILE
 # Percorso: app/services/account_service.py
+# v2: + commission fields on create
 # ============================================================
 
 from sqlalchemy.orm import Session
@@ -38,6 +38,11 @@ class AccountService:
             user_id=user_id,
             name=data.name,
             description=data.description,
+            commission_option_per_contract=data.commission_option_per_contract,
+            commission_option_close_per_contract=data.commission_option_close_per_contract,
+            commission_stock_type=data.commission_stock_type,
+            commission_stock_value=data.commission_stock_value,
+            commission_stock_close_value=data.commission_stock_close_value,
         )
         return self.account_repo.create(account)
 

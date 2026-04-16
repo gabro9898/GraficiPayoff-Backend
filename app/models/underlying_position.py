@@ -1,6 +1,6 @@
 # ============================================================
-# ★ BACKEND — NUOVO FILE
 # Percorso: app/models/underlying_position.py
+# v3: + commission (open) + close_commission
 # ============================================================
 
 import uuid
@@ -38,6 +38,10 @@ class UnderlyingPosition(Base):
     status: Mapped[UPStatus] = mapped_column(SAEnum(UPStatus), default=UPStatus.OPEN, nullable=False)
     close_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     close_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # ★ Commissions
+    commission: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    close_commission: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/user_preference.py
-# v4: + broker
+# v5: + strike_mode
 # ============================================================
 
 from datetime import datetime
@@ -18,6 +18,7 @@ class PreferenceUpdateRequest(BaseModel):
     payoff_settings: str | None = None  # JSON string
     theme: str | None = Field(None, min_length=1, max_length=32)
     broker: str | None = Field(None, min_length=1, max_length=32)
+    strike_mode: str | None = Field(None, min_length=1, max_length=20)  # ★ v5
 
 
 class PreferenceResponse(BaseModel):
@@ -32,6 +33,7 @@ class PreferenceResponse(BaseModel):
     payoff_settings: str | None
     theme: str
     broker: str
+    strike_mode: str  # ★ v5
     created_at: datetime
     updated_at: datetime
 

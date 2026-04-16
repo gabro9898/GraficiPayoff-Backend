@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/user_preference.py
-# v4: + broker (preferred broker id)
+# v5: + strike_mode
 # ============================================================
 
 import uuid
@@ -37,6 +37,9 @@ class UserPreference(Base):
 
     # ★ Broker preferito (ib, tastytrade, ecc.)
     broker: Mapped[str] = mapped_column(String(32), default="ib", nullable=False)
+
+    # ★ v5: Strike mode (all-fast, all-normal, 32, 24, 16, 8, 4, 2)
+    strike_mode: Mapped[str] = mapped_column(String(20), default="all-fast", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

@@ -34,7 +34,7 @@ class Strategy(Base):
     contract_multiplier: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # ★ Scadenza più vicina tra i trades aperti
     earliest_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
-
+    underlying_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

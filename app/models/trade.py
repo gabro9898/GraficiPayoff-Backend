@@ -1,6 +1,6 @@
 # ============================================================
 # Percorso: app/models/trade.py
-# v2: + trading_class column (SPXW, SPX, etc.)
+# v4: + commission (open) + close_commission
 # ============================================================
 
 import uuid
@@ -45,8 +45,11 @@ class Trade(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     expiry: Mapped[date] = mapped_column(Date, nullable=False)
 
-    # ★ v2: trading class (SPXW, SPX, NDX, NDXP, etc.)
     trading_class: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # ★ Commissions
+    commission: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    close_commission: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
     # --- Greeks (at time of trade entry) ---
     delta: Mapped[float | None] = mapped_column(Float, nullable=True)

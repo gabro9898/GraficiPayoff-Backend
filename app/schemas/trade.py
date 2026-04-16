@@ -1,6 +1,6 @@
 # ============================================================
 # Percorso: app/schemas/trade.py
-# v2: + trading_class in TradeResponse
+# v4: + commission + close_commission
 # ============================================================
 
 from datetime import datetime, date
@@ -19,7 +19,9 @@ class TradeCreateRequest(BaseModel):
     quantity: int = Field(gt=0)
     expiry: date
     enabled: bool = True
-    trading_class: str | None = None  # ★ v2
+    trading_class: str | None = None
+    commission: float = Field(default=0.0, ge=0)
+    open_date: datetime | None = None
     delta: float | None = None
     gamma: float | None = None
     theta: float | None = None
@@ -65,7 +67,9 @@ class TradeResponse(BaseModel):
     expiry: date
     enabled: bool
     frozen: bool
-    trading_class: str | None  # ★ v2
+    trading_class: str | None
+    commission: float
+    close_commission: float
     delta: float | None
     gamma: float | None
     theta: float | None

@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/config.py
-# v5: + Stripe settings
+# v6: + GEX / Polygon settings
 # ============================================================
 
 from pydantic_settings import BaseSettings
@@ -32,12 +32,22 @@ class Settings(BaseSettings):
     # Encryption key per token storage
     TOKEN_ENCRYPTION_KEY: str = ""
 
-    # ★ Stripe
+    # Stripe
     STRIPE_SECRET_KEY: str = ""
     STRIPE_PRICE_MONTHLY: str = ""
     STRIPE_PRICE_ANNUAL: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     FRONTEND_URL: str = "http://localhost:5173"
+
+    # ★ GEX / Polygon
+    POLYGON_API_KEY: str = ""
+    # 5/min = piano free. Imposta 0 per disattivare il rate limit (piano Starter/Developer).
+    POLYGON_RATE_LIMIT_PER_MINUTE: int = 5
+    # Lista ticker (comma-separated) aggiornati dallo scheduler giornaliero.
+    # Per ora solo SPX; domani aggiungerai SPY, QQQ, ecc.
+    GEX_TICKERS: str = "SPX"
+    # Flag per disattivare completamente lo scheduler (utile in locale)
+    GEX_ENABLED: bool = True
 
     @property
     def tastytrade_base_url(self) -> str:
@@ -50,6 +60,11 @@ class Settings(BaseSettings):
         if self.TASTYTRADE_SANDBOX:
             return "https://my.cert.tastyworks.com"
         return "https://my.tastytrade.com"
+
+    @property
+    def gex_tickers_list(self) -> list[str]:
+        """Lista dei ticker da aggiornare, parsata da GEX_TICKERS."""
+        return [t.strip().upper() for t in self.GEX_TICKERS.split(",") if t.strip()]
 
     class Config:
         env_file = ".env"

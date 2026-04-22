@@ -1,6 +1,7 @@
 # ============================================================
 # Percorso: app/schemas/trade.py
-# v4: + commission + close_commission
+# v6: TradeUpdateRequest accetta commission e close_commission
+#     (per consentire correzione delle commissioni dopo l'apertura)
 # ============================================================
 
 from datetime import datetime, date
@@ -47,6 +48,10 @@ class TradeUpdateRequest(BaseModel):
     underlying_price: float | None = Field(None, gt=0)
     implied_volatility: float | None = Field(None, ge=0)
     notes: str | None = Field(None, max_length=500)
+    # ★ v6: commissioni modificabili dopo l'apertura
+    commission: float | None = Field(None, ge=0)
+    close_commission: float | None = Field(None, ge=0)
+    close_premium: float | None = Field(None, ge=0)
 
 
 class TradeCloseRequest(BaseModel):
@@ -58,6 +63,7 @@ class TradeCloseRequest(BaseModel):
 class TradeResponse(BaseModel):
     id: str
     strategy_id: str
+    parent_trade_id: str | None = None
     ticker: str
     option_type: OptionType
     direction: Direction

@@ -1,6 +1,11 @@
 # ============================================================
 # Percorso: app/services/strategy_service.py
-# v9: commissions (open+close) + underlying_expiry
+# v11: ★ FONTE UNICA DI VERITÀ per realized_pnl.
+#      Tutti i metodi che modificano lo stato chiamano
+#      TradeService.recalculate_strategy_pnl alla fine.
+#      Rimossa la logica incrementale (era 2 fonti di verità).
+#      + update() supporta account_id e contract_multiplier
+#        con verifica ownership del nuovo account.
 # ============================================================
 
 from datetime import datetime, timezone
@@ -20,6 +25,7 @@ from app.schemas.underlying_position import (
     UnderlyingPositionCreateRequest, UnderlyingPositionCloseRequest,
 )
 from app.utils.exceptions import NotFoundException, ForbiddenException
+from app.services.trade_service import TradeService
 
 
 class StrategyService:
@@ -28,6 +34,8 @@ class StrategyService:
         self.strategy_repo = StrategyRepository(db)
         self.account_repo = AccountRepository(db)
         self.trade_repo = TradeRepository(db)
+        # ★ v11: usato come fonte unica per ricalcolare realized_pnl
+        self.trade_service = TradeService(db)
 
     def _verify_account_ownership(self, account_id: str, user_id: str) -> None:
         account = self.account_repo.find_by_id(account_id)
@@ -102,14 +110,13 @@ class StrategyService:
         earliest = None
         if data.legs:
             earliest = min(leg.expiry for leg in data.legs)
-        total_open_commission = sum(getattr(leg, 'commission', 0.0) or 0.0 for leg in data.legs)
         strategy = Strategy(
             user_id=user_id, account_id=data.account_id, number=next_number,
             name=data.name, description=data.description, ticker=data.ticker,
             fill_price=data.fill_price, contract_multiplier=data.contract_multiplier,
             earliest_expiry=earliest, status="OPEN",
-            realized_pnl=-total_open_commission,
-            underlying_expiry=data.underlying_expiry,  # ★ v9: futures contract expiry
+            realized_pnl=0.0,  # ★ v11: verrà calcolato da recalculate_strategy_pnl
+            underlying_expiry=data.underlying_expiry,
         )
         self.db.add(strategy)
         self.db.flush()
@@ -117,6 +124,8 @@ class StrategyService:
             trade = self._create_trade_from_leg(strategy.id, data.ticker, leg)
             self.db.add(trade)
         self.db.commit()
+        # ★ v11: fonte unica di verità
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
@@ -129,9 +138,9 @@ class StrategyService:
         new_earliest = min(leg.expiry for leg in data.legs)
         if strategy.earliest_expiry is None or new_earliest < strategy.earliest_expiry:
             strategy.earliest_expiry = new_earliest
-        added_commission = sum(getattr(leg, 'commission', 0.0) or 0.0 for leg in data.legs)
-        strategy.realized_pnl = (strategy.realized_pnl or 0.0) - added_commission
         self.db.commit()
+        # ★ v11
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
@@ -150,27 +159,71 @@ class StrategyService:
             if leg_update.theta is not None: trade.theta = leg_update.theta
             if leg_update.vega is not None: trade.vega = leg_update.vega
         self.db.commit()
+        # ★ v11
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
     def close_leg(self, strategy_id: str, user_id: str, data: StrategyCloseLegRequest) -> Strategy:
+        """
+        Chiude una leg (totale o parziale). Dopo lo split/close, ricalcola P&L.
+        """
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
         now = datetime.now(timezone.utc)
+
         trade = None
         for t in strategy.trades:
-            if t.id == data.trade_id: trade = t; break
-        if not trade: raise NotFoundException(f"Trade {data.trade_id}")
-        if trade.status == TradeStatus.CLOSED: raise ForbiddenException()
-        multiplier = 1 if trade.direction == Direction.BUY else -1
-        leg_pnl = (data.close_premium - trade.premium) * multiplier * trade.quantity * 100
+            if t.id == data.trade_id:
+                trade = t
+                break
+        if not trade:
+            raise NotFoundException(f"Trade {data.trade_id}")
+        if trade.status == TradeStatus.CLOSED:
+            raise ForbiddenException()
+
+        qty_to_close = data.quantity_to_close or trade.quantity
+        if qty_to_close > trade.quantity:
+            raise ForbiddenException()
+
+        is_partial = qty_to_close < trade.quantity
+
+        if is_partial:
+            residual_qty = trade.quantity - qty_to_close
+            residual = Trade(
+                strategy_id=trade.strategy_id,
+                parent_trade_id=trade.id,
+                ticker=trade.ticker,
+                option_type=trade.option_type,
+                direction=trade.direction,
+                strike=trade.strike,
+                premium=trade.premium,
+                quantity=residual_qty,
+                expiry=trade.expiry,
+                enabled=trade.enabled,
+                frozen=trade.frozen,
+                trading_class=trade.trading_class,
+                commission=0.0,  # commissione apertura già pagata dal parent
+                open_date=trade.open_date,
+                delta=trade.delta,
+                gamma=trade.gamma,
+                theta=trade.theta,
+                vega=trade.vega,
+                underlying_price=trade.underlying_price,
+                implied_volatility=trade.implied_volatility,
+                status=TradeStatus.OPEN,
+            )
+            self.db.add(residual)
+            trade.quantity = qty_to_close
+
         trade.status = TradeStatus.CLOSED
         trade.close_premium = data.close_premium
         trade.close_date = now
         trade.close_commission = getattr(data, 'close_commission', 0.0) or 0.0
-        close_comm = trade.close_commission
-        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + leg_pnl - close_comm
+
         self._recompute_earliest_expiry(strategy)
         self.db.commit()
+        # ★ v11
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
@@ -185,8 +238,9 @@ class StrategyService:
             status=UPStatus.OPEN,
         )
         self.db.add(position)
-        strategy.realized_pnl = (strategy.realized_pnl or 0.0) - commission
         self.db.commit()
+        # ★ v11
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
@@ -195,63 +249,87 @@ class StrategyService:
         now = datetime.now(timezone.utc)
         position = None
         for p in strategy.underlying_positions:
-            if p.id == data.position_id: position = p; break
-        if not position: raise NotFoundException(f"UnderlyingPosition {data.position_id}")
-        if position.status == UPStatus.CLOSED: raise ForbiddenException()
-        mult = 1 if position.direction == UPDirection.BUY else -1
-        pos_pnl = (data.close_price - position.entry_price) * mult * position.quantity * position.multiplier
+            if p.id == data.position_id:
+                position = p
+                break
+        if not position:
+            raise NotFoundException(f"UnderlyingPosition {data.position_id}")
+        if position.status == UPStatus.CLOSED:
+            raise ForbiddenException()
         position.status = UPStatus.CLOSED
         position.close_price = data.close_price
         position.close_date = now
-        close_comm = getattr(data, 'close_commission', 0.0) or 0.0
-        position.close_commission = close_comm
-        strategy.realized_pnl = (strategy.realized_pnl or 0.0) + pos_pnl - close_comm
+        position.close_commission = getattr(data, 'close_commission', 0.0) or 0.0
         self.db.commit()
+        # ★ v11
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
     def close(self, strategy_id: str, user_id: str, data: StrategyCloseRequest) -> Strategy:
+        """
+        Chiude tutta la strategia (mass close).
+        """
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
         now = datetime.now(timezone.utc)
         strategy.status = "CLOSED"
+
         for trade in strategy.trades:
             if trade.status == TradeStatus.OPEN:
                 trade.status = TradeStatus.CLOSED
                 trade.close_premium = data.close_premium
                 trade.close_date = now
+
         for pos in strategy.underlying_positions:
             if pos.status == UPStatus.OPEN:
                 close_price = data.underlying_close_price if data.underlying_close_price is not None else 0.0
-                mult = 1 if pos.direction == UPDirection.BUY else -1
-                pos_pnl = (close_price - pos.entry_price) * mult * pos.quantity * pos.multiplier
                 pos.status = UPStatus.CLOSED
                 pos.close_price = close_price
                 pos.close_date = now
-                strategy.realized_pnl = (strategy.realized_pnl or 0.0) + pos_pnl
+
         self.db.commit()
+        # ★ v11
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
     def settle(self, strategy_id: str, user_id: str, data: StrategySettleRequest) -> Strategy:
+        """
+        Settlement a scadenza.
+        """
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
         now = datetime.now(timezone.utc)
         sp = data.settlement_price
         strategy.status = "CLOSED"
         strategy.settlement_price = sp
+
         for trade in strategy.trades:
             if trade.status == TradeStatus.OPEN:
-                if trade.option_type == OptionType.CALL: intrinsic = max(0.0, sp - trade.strike)
-                else: intrinsic = max(0.0, trade.strike - sp)
+                if trade.option_type == OptionType.CALL:
+                    intrinsic = max(0.0, sp - trade.strike)
+                else:
+                    intrinsic = max(0.0, trade.strike - sp)
                 trade.close_premium = intrinsic
                 trade.close_date = now
                 trade.status = TradeStatus.CLOSED
+
         self.db.commit()
+        # ★ v11
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
     def update(self, strategy_id: str, user_id: str, data: StrategyUpdateRequest) -> Strategy:
+        """
+        ★ v11: aggiorna name/description/fill_price/account_id/contract_multiplier.
+        Se viene cambiato account_id, verifica ownership del nuovo account.
+        """
         strategy = self.get_by_id(strategy_id, user_id)
-        return self.strategy_repo.update(strategy, data.model_dump(exclude_unset=True))
+        update_data = data.model_dump(exclude_unset=True)
+        # ★ v11: se viene cambiato account_id, verifica ownership
+        if 'account_id' in update_data and update_data['account_id'] != strategy.account_id:
+            self._verify_account_ownership(update_data['account_id'], user_id)
+        return self.strategy_repo.update(strategy, update_data)
 
     def delete(self, strategy_id: str, user_id: str) -> None:
         strategy = self.get_by_id(strategy_id, user_id)

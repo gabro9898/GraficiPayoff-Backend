@@ -1,6 +1,7 @@
 # ============================================================
 # Percorso: app/schemas/strategy.py
-# v7: + underlying_expiry on create and response
+# v9: + account_id e contract_multiplier su StrategyUpdateRequest
+#     (per modifica account/multiplier dal Portfolio EditStrategyModal)
 # ============================================================
 
 from datetime import datetime, date
@@ -33,7 +34,7 @@ class StrategyCreateRequest(BaseModel):
     ticker: str = Field(min_length=1, max_length=20)
     fill_price: float | None = None
     contract_multiplier: int = Field(default=1, ge=1)
-    underlying_expiry: date | None = None  # ★ v7: futures contract expiry
+    underlying_expiry: date | None = None
     legs: list[StrategyLegInput] = Field(default_factory=list)
 
 
@@ -55,6 +56,9 @@ class StrategyUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
     fill_price: float | None = None
+    # ★ v9: nuovi campi modificabili dall'EditStrategyModal
+    account_id: str | None = None
+    contract_multiplier: int | None = Field(None, ge=1)
 
 
 class StrategyUpdateLegRequest(BaseModel):
@@ -77,6 +81,7 @@ class StrategyCloseLegRequest(BaseModel):
     trade_id: str
     close_premium: float = Field(ge=0)
     close_commission: float = Field(default=0.0, ge=0)
+    quantity_to_close: int | None = Field(default=None, gt=0)
 
 
 # --- Responses ---
@@ -95,7 +100,7 @@ class StrategyResponse(BaseModel):
     realized_pnl: float
     contract_multiplier: int
     earliest_expiry: date | None
-    underlying_expiry: date | None  # ★ v7
+    underlying_expiry: date | None
     created_at: datetime
     updated_at: datetime
 

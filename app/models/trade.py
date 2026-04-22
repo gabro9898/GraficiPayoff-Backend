@@ -1,6 +1,7 @@
 # ============================================================
 # Percorso: app/models/trade.py
-# v4: + commission (open) + close_commission
+# v5: + parent_trade_id (partial close support)
+#     + pnl property uses strategy.contract_multiplier
 # ============================================================
 
 import uuid
@@ -34,6 +35,11 @@ class Trade(Base):
     )
     strategy_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("strategies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # ★ v5: parent_trade_id per partial close (nullable, self-referential FK)
+    parent_trade_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("trades.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # --- Basic option data ---
@@ -92,4 +98,6 @@ class Trade(Base):
         if self.close_premium is None:
             return None
         multiplier = 1 if self.direction == Direction.BUY else -1
-        return (self.close_premium - self.premium) * multiplier * self.quantity * 100
+        # ★ v5: usa contract_multiplier della strategy invece di 100 hardcoded
+        mult_contract = self.strategy.contract_multiplier if self.strategy else 100
+        return (self.close_premium - self.premium) * multiplier * self.quantity * mult_contract

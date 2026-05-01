@@ -1,7 +1,9 @@
 # ============================================================
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/trade.py
-# v5: + parent_trade_id (partial close support)
-#     + pnl property uses strategy.contract_multiplier
+# v6: + settlement_price per-trade (per settle parziale leg-by-leg).
+#     Usato quando una leg di un calendar/diagonal scade prima delle altre
+#     e viene settled automaticamente al close del sottostante di quella data.
 # ============================================================
 
 import uuid
@@ -80,6 +82,12 @@ class Trade(Base):
     )
     close_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     close_premium: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # ★ v6: settlement_price del sottostante usato per il settle a scadenza di QUESTA leg.
+    # Popolato solo quando la leg viene chiusa via auto-settle (parziale o totale).
+    # Per chiusure manuali ordinarie resta None.
+    settlement_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

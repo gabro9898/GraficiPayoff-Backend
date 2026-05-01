@@ -1,7 +1,8 @@
 # ============================================================
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/trade.py
-# v6: TradeUpdateRequest accetta commission e close_commission
-#     (per consentire correzione delle commissioni dopo l'apertura)
+# v7: + settlement_price in TradeResponse (per visualizzare nel
+#     frontend a quale prezzo è stata settled la leg).
 # ============================================================
 
 from datetime import datetime, date
@@ -86,6 +87,7 @@ class TradeResponse(BaseModel):
     open_date: datetime
     close_date: datetime | None
     close_premium: float | None
+    settlement_price: float | None  # ★ v7
     pnl: float | None
     notes: str | None
     created_at: datetime

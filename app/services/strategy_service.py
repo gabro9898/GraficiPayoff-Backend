@@ -1,14 +1,14 @@
 # ============================================================
 # Percorso: app/services/strategy_service.py
-# v11: ★ FONTE UNICA DI VERITÀ per realized_pnl.
-#      Tutti i metodi che modificano lo stato chiamano
-#      TradeService.recalculate_strategy_pnl alla fine.
-#      Rimossa la logica incrementale (era 2 fonti di verità).
-#      + update() supporta account_id e contract_multiplier
-#        con verifica ownership del nuovo account.
+# v12: + settle_expired_legs (settle parziale leg-by-leg, multi-expiry)
+#      + get_strategies_with_expired_legs (lookup per il nuovo auto-settle)
+#
+#      Mantiene il vecchio settle() invariato per retro-compatibilità.
+#      Tutti i metodi continuano a delegare il calcolo del realized_pnl
+#      a TradeService.recalculate_strategy_pnl (fonte unica di verità v11).
 # ============================================================
 
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
 from sqlalchemy.orm import Session
 from app.models.strategy import Strategy
 from app.models.trade import Trade, TradeStatus, OptionType, Direction
@@ -19,6 +19,7 @@ from app.repositories.trade_repository import TradeRepository
 from app.schemas.strategy import (
     StrategyCreateRequest, StrategyUpdateRequest,
     StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
+    StrategySettleExpiredLegsRequest,
     StrategyUpdateLegsRequest, StrategyCloseLegRequest,
 )
 from app.schemas.underlying_position import (
@@ -34,7 +35,7 @@ class StrategyService:
         self.strategy_repo = StrategyRepository(db)
         self.account_repo = AccountRepository(db)
         self.trade_repo = TradeRepository(db)
-        # ★ v11: usato come fonte unica per ricalcolare realized_pnl
+        # v11: usato come fonte unica per ricalcolare realized_pnl
         self.trade_service = TradeService(db)
 
     def _verify_account_ownership(self, account_id: str, user_id: str) -> None:
@@ -82,6 +83,10 @@ class StrategyService:
     def get_open_expired(self, user_id: str) -> list[Strategy]:
         return self.strategy_repo.find_open_expired_by_user(user_id)
 
+    # ★ v12: lookup per il nuovo auto-settle parziale
+    def get_strategies_with_expired_legs(self, user_id: str) -> list[Strategy]:
+        return self.strategy_repo.find_strategies_with_expired_open_legs(user_id)
+
     def _create_trade_from_leg(self, strategy_id: str, ticker: str, leg) -> Trade:
         return Trade(
             strategy_id=strategy_id,
@@ -115,7 +120,7 @@ class StrategyService:
             name=data.name, description=data.description, ticker=data.ticker,
             fill_price=data.fill_price, contract_multiplier=data.contract_multiplier,
             earliest_expiry=earliest, status="OPEN",
-            realized_pnl=0.0,  # ★ v11: verrà calcolato da recalculate_strategy_pnl
+            realized_pnl=0.0,
             underlying_expiry=data.underlying_expiry,
         )
         self.db.add(strategy)
@@ -124,7 +129,6 @@ class StrategyService:
             trade = self._create_trade_from_leg(strategy.id, data.ticker, leg)
             self.db.add(trade)
         self.db.commit()
-        # ★ v11: fonte unica di verità
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
@@ -139,7 +143,6 @@ class StrategyService:
         if strategy.earliest_expiry is None or new_earliest < strategy.earliest_expiry:
             strategy.earliest_expiry = new_earliest
         self.db.commit()
-        # ★ v11
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
@@ -159,7 +162,6 @@ class StrategyService:
             if leg_update.theta is not None: trade.theta = leg_update.theta
             if leg_update.vega is not None: trade.vega = leg_update.vega
         self.db.commit()
-        # ★ v11
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
@@ -222,7 +224,6 @@ class StrategyService:
 
         self._recompute_earliest_expiry(strategy)
         self.db.commit()
-        # ★ v11
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
@@ -239,7 +240,6 @@ class StrategyService:
         )
         self.db.add(position)
         self.db.commit()
-        # ★ v11
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
@@ -261,7 +261,6 @@ class StrategyService:
         position.close_date = now
         position.close_commission = getattr(data, 'close_commission', 0.0) or 0.0
         self.db.commit()
-        # ★ v11
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
@@ -288,14 +287,14 @@ class StrategyService:
                 pos.close_date = now
 
         self.db.commit()
-        # ★ v11
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
     def settle(self, strategy_id: str, user_id: str, data: StrategySettleRequest) -> Strategy:
         """
-        Settlement a scadenza.
+        Settle 'vecchio stile': UN solo settlement_price applicato a TUTTE le legs OPEN.
+        Marca SEMPRE la strategia come CLOSED. Mantenuto per retro-compatibilità.
         """
         strategy = self.get_by_id_with_trades(strategy_id, user_id)
         now = datetime.now(timezone.utc)
@@ -314,19 +313,93 @@ class StrategyService:
                 trade.status = TradeStatus.CLOSED
 
         self.db.commit()
-        # ★ v11
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
         return strategy
 
+    # ★ v12: settle parziale leg-by-leg
+    def settle_expired_legs(
+        self, strategy_id: str, user_id: str,
+        data: StrategySettleExpiredLegsRequest,
+    ) -> Strategy:
+        """
+        Settle parziale: chiude SOLO le legs OPEN con expiry < today() per cui
+        è presente un settlement_price nella mappa `settlements`.
+
+        - settlements: { "YYYY-MM-DD" : underlying_close_price }
+        - intrinsic per leg = max(0, sp - strike) per CALL, max(0, strike - sp) per PUT
+        - trade.settlement_price viene salvato per-trade (campo v6)
+        - se dopo l'operazione restano trade/underlying OPEN → strategia resta OPEN
+        - altrimenti → strategia CLOSED
+        - realized_pnl ricalcolato da TradeService.recalculate_strategy_pnl
+        """
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        today = date.today()
+        now = datetime.now(timezone.utc)
+        settlements = data.settlements
+
+        settled_count = 0
+        skipped_missing_price = 0
+
+        for trade in strategy.trades:
+            if trade.status != TradeStatus.OPEN:
+                continue
+            if trade.expiry >= today:
+                # leg ancora attiva, non toccare
+                continue
+
+            expiry_key = trade.expiry.isoformat()
+            sp = settlements.get(expiry_key)
+            if sp is None:
+                # Frontend non ci ha mandato il prezzo per questa scadenza:
+                # skip silenzioso (la prossima auto-settle ritenterà).
+                skipped_missing_price += 1
+                continue
+
+            if trade.option_type == OptionType.CALL:
+                intrinsic = max(0.0, sp - trade.strike)
+            else:
+                intrinsic = max(0.0, trade.strike - sp)
+
+            trade.close_premium = intrinsic
+            trade.close_date = now
+            trade.status = TradeStatus.CLOSED
+            trade.settlement_price = sp
+            settled_count += 1
+
+        if settled_count == 0:
+            # Nulla settled: non sporcare il DB con commit inutili
+            print(f"[SettleExpired] {strategy.id}: 0 legs settled, "
+                  f"{skipped_missing_price} skipped (missing price)")
+            return strategy
+
+        # Se non rimangono né trade né underlying OPEN, chiudi la strategia
+        has_open_trades = any(t.status == TradeStatus.OPEN for t in strategy.trades)
+        has_open_underlying = any(
+            p.status == UPStatus.OPEN for p in strategy.underlying_positions
+        )
+        if not has_open_trades and not has_open_underlying:
+            strategy.status = "CLOSED"
+
+        # Aggiorna earliest_expiry sui trade ancora aperti
+        self._recompute_earliest_expiry(strategy)
+
+        self.db.commit()
+        # Fonte unica di verità per realized_pnl
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
+        self.db.refresh(strategy)
+
+        print(f"[SettleExpired] {strategy.id}: {settled_count} legs settled, "
+              f"{skipped_missing_price} skipped, strategy.status={strategy.status}")
+        return strategy
+
     def update(self, strategy_id: str, user_id: str, data: StrategyUpdateRequest) -> Strategy:
         """
-        ★ v11: aggiorna name/description/fill_price/account_id/contract_multiplier.
+        v11: aggiorna name/description/fill_price/account_id/contract_multiplier.
         Se viene cambiato account_id, verifica ownership del nuovo account.
         """
         strategy = self.get_by_id(strategy_id, user_id)
         update_data = data.model_dump(exclude_unset=True)
-        # ★ v11: se viene cambiato account_id, verifica ownership
         if 'account_id' in update_data and update_data['account_id'] != strategy.account_id:
             self._verify_account_ownership(update_data['account_id'], user_id)
         return self.strategy_repo.update(strategy, update_data)

@@ -1,14 +1,14 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/repositories/strategy_repository.py
-# v2: + find_all_by_user_with_trades per Portfolio
+# v3: + find_strategies_with_expired_open_legs (per auto-settle parziale)
 # ============================================================
 
 from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 from app.models.strategy import Strategy
-from app.models.trade import Trade
+from app.models.trade import Trade, TradeStatus
 
 
 class StrategyRepository:
@@ -34,7 +34,7 @@ class StrategyRepository:
             .all()
         )
 
-    # ★ Nuovo: tutte le strategie con trades per Portfolio
+    # ★ v2: tutte le strategie con trades per Portfolio
     def find_all_by_user_with_trades(self, user_id: str) -> list[Strategy]:
         return (
             self.db.query(Strategy)
@@ -66,6 +66,10 @@ class StrategyRepository:
         return q.order_by(Strategy.number.asc()).all()
 
     def find_open_expired_by_user(self, user_id: str) -> list[Strategy]:
+        """
+        VECCHIO COMPORTAMENTO: strategie OPEN dove TUTTI i trade sono scaduti.
+        Mantenuto per retro-compatibilità con il vecchio settle 'tutto in una volta'.
+        """
         max_expiry_sub = (
             select(func.max(Trade.expiry))
             .where(Trade.strategy_id == Strategy.id)
@@ -79,6 +83,37 @@ class StrategyRepository:
                 Strategy.user_id == user_id,
                 Strategy.status == "OPEN",
                 max_expiry_sub < date.today(),
+            )
+            .all()
+        )
+
+    # ★ v3: strategie OPEN con ALMENO UN trade OPEN già scaduto.
+    # Superset di find_open_expired_by_user: include sia calendar/diagonal con
+    # solo una leg scaduta, sia strategie con tutte le leg scadute.
+    # Usato dal nuovo flow di auto-settle parziale leg-by-leg.
+    def find_strategies_with_expired_open_legs(self, user_id: str) -> list[Strategy]:
+        today = date.today()
+        # Subquery: MIN(expiry) tra i SOLI trade OPEN della strategia.
+        # Se è < today significa che esiste almeno una leg OPEN già scaduta.
+        # Se la subquery è NULL (nessun trade OPEN), la strategia viene esclusa
+        # automaticamente dal confronto < today (NULL < x è NULL/false).
+        min_open_expiry_sub = (
+            select(func.min(Trade.expiry))
+            .where(
+                Trade.strategy_id == Strategy.id,
+                Trade.status == TradeStatus.OPEN,
+            )
+            .correlate(Strategy)
+            .scalar_subquery()
+        )
+        return (
+            self.db.query(Strategy)
+            .options(joinedload(Strategy.trades), joinedload(Strategy.underlying_positions))
+            .filter(
+                Strategy.user_id == user_id,
+                Strategy.status == "OPEN",
+                min_open_expiry_sub.is_not(None),
+                min_open_expiry_sub < today,
             )
             .all()
         )

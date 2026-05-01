@@ -1,7 +1,8 @@
 # ============================================================
+# ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/strategy.py
-# v9: + account_id e contract_multiplier su StrategyUpdateRequest
-#     (per modifica account/multiplier dal Portfolio EditStrategyModal)
+# v10: + StrategySettleExpiredLegsRequest (settle parziale leg-by-leg
+#      con mappa expiry → settlement_price del sottostante)
 # ============================================================
 
 from datetime import datetime, date
@@ -49,7 +50,26 @@ class StrategyCloseRequest(BaseModel):
 
 
 class StrategySettleRequest(BaseModel):
+    """Settle 'vecchio stile': un solo settlement_price applicato a TUTTE le legs OPEN."""
     settlement_price: float = Field(gt=0)
+
+
+# ★ v10: settle parziale per scadenza
+class StrategySettleExpiredLegsRequest(BaseModel):
+    """
+    Settle parziale leg-by-leg.
+    `settlements` è una mappa { expiry_iso : settlement_price_underlying }
+    dove le chiavi sono date in formato ISO 'YYYY-MM-DD'.
+
+    Il backend:
+    - chiude solo le legs OPEN con expiry < today() per cui esiste
+      una entry nella mappa
+    - calcola intrinsic per ogni leg con il prezzo della SUA expiry
+    - salva trade.settlement_price per-trade
+    - lascia la strategia OPEN se restano legs non scadute
+    - chiude la strategia se non rimane nessuna leg/underlying OPEN
+    """
+    settlements: dict[str, float] = Field(min_length=1)
 
 
 class StrategyUpdateRequest(BaseModel):

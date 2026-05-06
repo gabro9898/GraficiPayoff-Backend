@@ -1,7 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/api/routes/gex.py
-# v2: + GET /gex/chain-all/{ticker} (multi-expiry)
+# v3: + POST /gex/refresh/{ticker} (trigger manuale del refresh)
 # ============================================================
 
 from datetime import date
@@ -13,6 +13,7 @@ from app.models.user import User
 from app.middleware.auth_middleware import get_current_user
 from app.controllers.gex_controller import GexController
 from app.schemas.gex import GexChainResponse, GexExpiriesResponse, GexAllChainsResponse
+from app.services import gex_scheduler as gex_scheduler_module
 
 router = APIRouter(prefix="/gex", tags=["GEX"])
 
@@ -72,3 +73,38 @@ def get_all_chains(
     _require_active_subscription(current_user)
     controller = GexController(db)
     return controller.get_all_chains(ticker)
+
+
+# ★ v3: trigger manuale del refresh GEX — route di emergenza, SENZA AUTH
+# Endpoint pubblico volutamente: serve a forzare il refresh al volo senza
+# dover prendere un token. Se il backend è esposto pubblicamente, valuta
+# l'aggiunta di un secret in header (es. X-Refresh-Secret).
+@router.post("/refresh/{ticker}", status_code=202)
+async def trigger_manual_refresh(ticker: str):
+    """
+    Forza un refresh manuale del GEX per il ticker indicato.
+    Background: loop di retry ogni 60s fino al successo o al cutoff orario.
+    Risposta immediata (202 Accepted).
+
+    Stati possibili:
+      - "started"          → loop avviato adesso
+      - "already_running"  → un loop era già in corso per questo ticker
+      - "unknown_ticker"   → ticker non configurato in GEX_TICKERS
+      - "disabled"         → scheduler disattivato o POLYGON_API_KEY mancante
+    """
+    scheduler = gex_scheduler_module.gex_scheduler
+    if scheduler is None:
+        raise HTTPException(status_code=503, detail="GEX scheduler non inizializzato")
+
+    result = scheduler.trigger_manual_refresh(ticker)
+
+    if result["status"] == "unknown_ticker":
+        raise HTTPException(
+            status_code=404,
+            detail=f"Ticker '{ticker}' non configurato. Disponibili: "
+                   f"{result.get('available_tickers', [])}",
+        )
+    if result["status"] == "disabled":
+        raise HTTPException(status_code=503, detail=result.get("message", "GEX disabilitato"))
+
+    return result

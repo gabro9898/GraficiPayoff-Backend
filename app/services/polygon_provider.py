@@ -84,10 +84,58 @@ class PolygonProvider(OIProvider):
     PAGE_LIMIT = 250         # limite hard di Polygon per snapshot
     MAX_PAGES_PER_CALL = 50  # safety: 50 × 250 = 12.500 strike per expiry+tipo
 
-    def __init__(self, api_key: str, rate_limit_per_minute: int = 5, http_timeout: float = 30.0):
+    # Retry interno su errori HTTP transient (ReadTimeout, 5xx, connection drop).
+    # Backoff: 1s, 2s, 4s, 8s tra tentativi → max ~4×60s + 15s = ~255s per chiamata.
+    RETRY_MAX_ATTEMPTS = 4
+    TRANSIENT_EXCEPTIONS = (
+        httpx.ReadTimeout,
+        httpx.ConnectTimeout,
+        httpx.PoolTimeout,
+        httpx.ReadError,
+        httpx.ConnectError,
+        httpx.RemoteProtocolError,
+    )
+
+    def __init__(self, api_key: str, rate_limit_per_minute: int = 5, http_timeout: float = 60.0):
         self.api_key = api_key
         self.rate_limiter = AsyncRateLimiter(rate_limit_per_minute)
-        self.http_timeout = http_timeout
+        # Granular timeout: connect rapido, read/pool generoso (Polygon a volte è lento).
+        self.http_timeout = httpx.Timeout(http_timeout, connect=10.0)
+
+    async def _request_with_retry(
+        self, client: httpx.AsyncClient, url: str, params: dict[str, Any]
+    ) -> httpx.Response:
+        """
+        Wrapper attorno a client.get con retry su errori HTTP transient.
+        Backoff esponenziale 1→2→4→8s. Errori 4xx (eccetto 429 gestito a monte)
+        e RuntimeError di logica vengono propagati senza retry.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(1, self.RETRY_MAX_ATTEMPTS + 1):
+            try:
+                resp = await client.get(url, params=params)
+                # 5xx → considerato transient, retry
+                if 500 <= resp.status_code < 600:
+                    last_exc = RuntimeError(f"HTTP {resp.status_code}")
+                    print(f"[Polygon] HTTP {resp.status_code} (transient) "
+                          f"attempt {attempt}/{self.RETRY_MAX_ATTEMPTS}: {resp.text[:200]}")
+                    if attempt < self.RETRY_MAX_ATTEMPTS:
+                        await asyncio.sleep(2 ** (attempt - 1))
+                        continue
+                    raise last_exc
+                return resp
+            except self.TRANSIENT_EXCEPTIONS as e:
+                last_exc = e
+                print(f"[Polygon] {type(e).__name__} attempt "
+                      f"{attempt}/{self.RETRY_MAX_ATTEMPTS}: {e}")
+                if attempt < self.RETRY_MAX_ATTEMPTS:
+                    await asyncio.sleep(2 ** (attempt - 1))
+                    continue
+                raise
+        # Loop terminato senza return — non dovrebbe accadere
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("Polygon request failed without exception")
 
     def _underlying_for_snapshot(self, ticker: str) -> str:
         ticker_up = ticker.upper()
@@ -154,7 +202,7 @@ class PolygonProvider(OIProvider):
             }
 
             await self.rate_limiter.acquire()
-            resp = await client.get(url, params=params)
+            resp = await self._request_with_retry(client, url, params)
 
             if resp.status_code == 429:
                 await asyncio.sleep(30)
@@ -219,7 +267,7 @@ class PolygonProvider(OIProvider):
             }
 
             await self.rate_limiter.acquire()
-            resp = await client.get(url, params=params)
+            resp = await self._request_with_retry(client, url, params)
 
             if resp.status_code == 429:
                 await asyncio.sleep(30)

@@ -53,6 +53,24 @@ def seed_app_settings():
         db.close()
 
 
+def ensure_schema_columns():
+    """Migrazioni leggere: aggiunge colonne nuove a tabelle esistenti che
+    Base.metadata.create_all() non sa gestire (create_all crea solo tabelle
+    nuove, non altera quelle che già esistono).
+    Idempotente grazie a `ADD COLUMN IF NOT EXISTS`.
+    """
+    from sqlalchemy import text
+    statements = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_processed_expiry TIMESTAMP WITH TIME ZONE",
+    ]
+    with engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception as e:
+                print(f"[Schema] Errore eseguendo '{stmt}': {e}")
+
+
 def backfill_subscription_tracking_once():
     """Al primo avvio dopo l'introduzione del subscription_scheduler, allinea
     last_processed_expiry = subscription_expiry per tutti gli utenti già
@@ -127,6 +145,8 @@ def create_app() -> FastAPI:
     def on_startup():
         # Crea tutte le tabelle (inclusa la nuova gex_data)
         Base.metadata.create_all(bind=engine)
+        # ★ Aggiunge colonne nuove a tabelle pre-esistenti (create_all non lo fa)
+        ensure_schema_columns()
         seed_app_settings()
 
         # ★ Allinea last_processed_expiry per gli utenti pre-esistenti, una volta

@@ -33,6 +33,14 @@ class EmailAlreadyExistsException(AppException):
         )
 
 
+class InvalidResetCodeException(AppException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset code",
+        )
+
+
 # --- Resource exceptions ---
 
 class NotFoundException(AppException):

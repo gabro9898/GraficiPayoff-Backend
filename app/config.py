@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     BREVO_SENDER_NAME: str = "OptionTracker"
     BREVO_REPLY_TO: str = "gabriele.murru@optiontraders.it"
 
+    # ★ Subscription scheduler
+    # URL a cui mandiamo gli utenti per rinnovare l'abbonamento.
+    SUBSCRIPTION_RENEWAL_URL: str = "https://optiontracker.optiontraders.it/dashboard"
+    # Flag per disattivare lo scheduler (utile in locale o in test)
+    SUBSCRIPTION_SCHEDULER_ENABLED: bool = True
+
     @property
     def tastytrade_base_url(self) -> str:
         if self.TASTYTRADE_SANDBOX:

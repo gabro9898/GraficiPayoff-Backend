@@ -23,6 +23,10 @@ class User(Base):
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     subscription_expiry: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Ultima scadenza "vista" dal subscription_scheduler. Usata per rilevare
+    # cambi di subscription_expiry (sia da webhook Stripe che da edit manuale
+    # del DB) e mandare l'email "pagamento ricevuto" una sola volta per cambio.
+    last_processed_expiry: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

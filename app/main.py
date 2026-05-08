@@ -16,9 +16,10 @@ from app.api.routes.app_info import router as app_info_router
 from app.api.routes.stripe import router as stripe_router
 from app.api.routes.gex import router as gex_router  # ★ GEX
 
-# ★ Import del modello GEX per registrarlo sul Base.metadata
-# (se non viene importato da qualche parte, create_all non lo vede)
+# ★ Import dei modelli per registrarli sul Base.metadata
+# (se non vengono importati da qualche parte, create_all non li vede)
 from app.models import gex_data  # noqa: F401
+from app.models import password_reset  # noqa: F401
 
 from app.services import gex_scheduler as gex_scheduler_module  # ★ GEX scheduler
 from app.services.gex_scheduler import GexScheduler

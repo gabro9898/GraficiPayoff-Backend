@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # Flag per disattivare completamente lo scheduler (utile in locale)
     GEX_ENABLED: bool = True
 
+    # ★ Brevo (email transazionali)
+    BREVO_API_KEY: str = ""
+    BREVO_SENDER_EMAIL: str = "noreply@mailoptiontracker.optiontraders.it"
+    BREVO_SENDER_NAME: str = "OptionTracker"
+    BREVO_REPLY_TO: str = "gabriele.murru@optiontraders.it"
+
     @property
     def tastytrade_base_url(self) -> str:
         if self.TASTYTRADE_SANDBOX:

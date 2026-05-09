@@ -244,3 +244,73 @@ def subscription_expiring_email(
     )
 
     return subject, html, text
+
+
+def contact_message_email(
+    user_first_name: str,
+    user_last_name: str,
+    user_email: str,
+    user_created_at: datetime | None,
+    message: str,
+) -> tuple[str, str, str]:
+    """Email che il founder riceve quando un utente loggato manda un messaggio
+    dalla chat di contatto sulla landing page.
+    Reply-To viene impostato sull'email dell'utente dal chiamante (email_service)
+    così premendo "Rispondi" si risponde direttamente all'utente.
+    """
+    safe_first = escape(user_first_name)
+    safe_last = escape(user_last_name)
+    safe_email = escape(user_email)
+    safe_message_html = escape(message).replace("\n", "<br>")
+    registered_at = (
+        user_created_at.strftime("%d/%m/%Y") if user_created_at else "—"
+    )
+
+    subject = f"Nuovo messaggio da {user_first_name} {user_last_name} ({user_email})"
+
+    html = f"""\
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>{subject}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 620px; margin: 0 auto; padding: 32px 24px;">
+  <h1 style="font-size: 20px; margin: 0 0 8px;">Nuovo messaggio dalla chat OptionTracker</h1>
+  <p style="color: #666; margin: 0 0 24px; font-size: 14px;">
+    Per rispondere all'utente: premi semplicemente "Rispondi" — il messaggio andrà direttamente a {safe_email}.
+  </p>
+
+  <div style="background: #f6f7f9; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 18px; margin-bottom: 18px;">
+    <div style="font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 0.5px; margin-bottom: 6px;">Utente</div>
+    <div style="font-size: 16px; font-weight: 600;">{safe_first} {safe_last}</div>
+    <div style="font-size: 14px; margin-top: 4px;">
+      <a href="mailto:{safe_email}" style="color: #4f6ef7; text-decoration: none;">{safe_email}</a>
+    </div>
+    <div style="font-size: 13px; color: #888; margin-top: 6px;">Registrato il {registered_at}</div>
+  </div>
+
+  <div style="background: #ffffff; border-left: 4px solid #4f6ef7; padding: 14px 18px;">
+    <div style="font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 0.5px; margin-bottom: 6px;">Messaggio</div>
+    <div style="font-size: 15px; white-space: pre-wrap;">{safe_message_html}</div>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 28px 0;">
+  <p style="color: #aaa; font-size: 12px; margin: 0;">
+    Email generata automaticamente dalla chat di contatto OptionTracker.
+  </p>
+</body>
+</html>
+"""
+
+    text = (
+        f"Nuovo messaggio dalla chat OptionTracker\n\n"
+        f"Da: {user_first_name} {user_last_name} <{user_email}>\n"
+        f"Registrato il: {registered_at}\n\n"
+        "Messaggio:\n"
+        f"{message}\n\n"
+        "---\n"
+        f"Per rispondere, basta premere 'Rispondi' a questa email.\n"
+    )
+
+    return subject, html, text

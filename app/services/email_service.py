@@ -27,13 +27,24 @@ def send_transactional_email(
     subject: str,
     html_content: str,
     text_content: str,
+    reply_to_email: str | None = None,
+    reply_to_name: str | None = None,
 ) -> None:
-    """Invia un'email tramite Brevo. Fire-and-forget: errori loggati, mai sollevati."""
+    """Invia un'email tramite Brevo. Fire-and-forget: errori loggati, mai sollevati.
+
+    Se reply_to_email è passato, sovrascrive il default (BREVO_REPLY_TO).
+    Utile per la chat di contatto: l'email arriva al founder con Reply-To
+    dell'utente, così "Rispondi" va dritto all'utente.
+    """
     settings = get_settings()
 
     if not settings.BREVO_API_KEY:
         logger.warning("BREVO_API_KEY non configurata: email a %s non inviata", to_email)
         return
+
+    reply_to: dict = {"email": reply_to_email or settings.BREVO_REPLY_TO}
+    if reply_to_name:
+        reply_to["name"] = reply_to_name
 
     payload = {
         "sender": {
@@ -41,7 +52,7 @@ def send_transactional_email(
             "name": settings.BREVO_SENDER_NAME,
         },
         "to": [{"email": to_email, "name": to_name}],
-        "replyTo": {"email": settings.BREVO_REPLY_TO},
+        "replyTo": reply_to,
         "subject": subject,
         "htmlContent": html_content,
         "textContent": text_content,

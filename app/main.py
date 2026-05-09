@@ -15,6 +15,7 @@ from app.api.routes.tastytrade import router as tastytrade_router
 from app.api.routes.app_info import router as app_info_router
 from app.api.routes.stripe import router as stripe_router
 from app.api.routes.gex import router as gex_router  # ★ GEX
+from app.api.routes.contact import router as contact_router  # ★ Chat contatto
 
 # ★ Import dei modelli per registrarli sul Base.metadata
 # (se non vengono importati da qualche parte, create_all non li vede)
@@ -136,6 +137,7 @@ def create_app() -> FastAPI:
     app.include_router(app_info_router, prefix="/api/v1")
     app.include_router(stripe_router, prefix="/api/v1")
     app.include_router(gex_router, prefix="/api/v1")  # ★ GEX
+    app.include_router(contact_router, prefix="/api/v1")  # ★ Chat contatto
 
     # ★ Subscription scheduler: tenuto in chiusura nel scope di create_app
     # così l'handler di shutdown lo trova.

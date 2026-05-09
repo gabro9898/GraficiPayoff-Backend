@@ -17,7 +17,12 @@ class ContactController:
     def __init__(self):
         self.settings = get_settings()
 
-    def send_message(self, user: User, message: str) -> None:
+    def send_message(
+        self,
+        user: User,
+        message: str,
+        attachments: list[dict] | None = None,
+    ) -> None:
         subject, html, text = contact_message_email(
             user_first_name=user.first_name,
             user_last_name=user.last_name,
@@ -33,4 +38,5 @@ class ContactController:
             text_content=text,
             reply_to_email=user.email,
             reply_to_name=f"{user.first_name} {user.last_name}",
+            attachments=attachments,
         )

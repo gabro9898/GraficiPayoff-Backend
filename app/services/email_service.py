@@ -10,6 +10,7 @@
 # rompere il flusso applicativo (registrazione, ecc.).
 # ============================================================
 
+import base64
 import logging
 
 import httpx
@@ -29,12 +30,17 @@ def send_transactional_email(
     text_content: str,
     reply_to_email: str | None = None,
     reply_to_name: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> None:
     """Invia un'email tramite Brevo. Fire-and-forget: errori loggati, mai sollevati.
 
     Se reply_to_email è passato, sovrascrive il default (BREVO_REPLY_TO).
     Utile per la chat di contatto: l'email arriva al founder con Reply-To
     dell'utente, così "Rispondi" va dritto all'utente.
+
+    `attachments` accetta una lista di dict del tipo:
+        {"filename": "screenshot.png", "content": <bytes>}
+    Il content (bytes) viene encodato in base64 prima di passarlo a Brevo.
     """
     settings = get_settings()
 
@@ -46,7 +52,7 @@ def send_transactional_email(
     if reply_to_name:
         reply_to["name"] = reply_to_name
 
-    payload = {
+    payload: dict = {
         "sender": {
             "email": settings.BREVO_SENDER_EMAIL,
             "name": settings.BREVO_SENDER_NAME,
@@ -57,6 +63,15 @@ def send_transactional_email(
         "htmlContent": html_content,
         "textContent": text_content,
     }
+
+    if attachments:
+        payload["attachment"] = [
+            {
+                "name": a["filename"],
+                "content": base64.b64encode(a["content"]).decode("ascii"),
+            }
+            for a in attachments
+        ]
     headers = {
         "api-key": settings.BREVO_API_KEY,
         "accept": "application/json",

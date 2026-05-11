@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     # Flag per disattivare lo scheduler (utile in locale o in test)
     SUBSCRIPTION_SCHEDULER_ENABLED: bool = True
 
+    # ★ Email verification
+    # Base URL del landing — usata per costruire il link di verifica email.
+    # Il link finale sarà: {LANDING_URL}/verify-email?token=...
+    LANDING_URL: str = "https://optiontracker.optiontraders.it"
+
     @property
     def tastytrade_base_url(self) -> str:
         if self.TASTYTRADE_SANDBOX:

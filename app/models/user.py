@@ -22,6 +22,11 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Email verification: nuovi utenti partono da False, esistenti vengono
+    # backfillati a True al primo startup (vedi main.backfill_email_verified_once).
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Consenso marketing GDPR — opzionale, default off, checkbox in registrazione.
+    marketing_consent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     subscription_expiry: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Ultima scadenza "vista" dal subscription_scheduler. Usata per rilevare
     # cambi di subscription_expiry (sia da webhook Stripe che da edit manuale

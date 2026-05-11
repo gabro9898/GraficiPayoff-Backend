@@ -22,6 +22,7 @@ from app.api.routes.contact import router as contact_router  # ★ Chat contatto
 from app.models import gex_data  # noqa: F401
 from app.models import password_reset  # noqa: F401
 from app.models import subscription_reminder_log  # noqa: F401
+from app.models import email_verification  # noqa: F401
 
 from app.services import gex_scheduler as gex_scheduler_module  # ★ GEX scheduler
 from app.services.gex_scheduler import GexScheduler
@@ -63,6 +64,12 @@ def ensure_schema_columns():
     from sqlalchemy import text
     statements = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_processed_expiry TIMESTAMP WITH TIME ZONE",
+        # ★ Email verification: nuovi utenti partiranno da FALSE, ma il default
+        # SERVER lo lasciamo TRUE così gli utenti pre-esistenti restano abilitati
+        # (vedi anche backfill_email_verified_once). Per i nuovi utenti il valore
+        # viene comunque sovrascritto a FALSE dal default Python del modello.
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     with engine.begin() as conn:
         for stmt in statements:
@@ -70,6 +77,47 @@ def ensure_schema_columns():
                 conn.execute(text(stmt))
             except Exception as e:
                 print(f"[Schema] Errore eseguendo '{stmt}': {e}")
+
+
+def backfill_email_verified_once():
+    """Al primo avvio dopo l'introduzione della verifica email, marca tutti
+    gli utenti pre-esistenti come email_verified=True (grandfathering).
+    I nuovi utenti vengono creati con email_verified=False dal codice Python
+    (vedi User model + AuthService.register).
+    Gated da una flag in app_settings: gira una sola volta nella vita del DB.
+
+    Nota: ensure_schema_columns aggiunge la colonna con DEFAULT TRUE proprio
+    per gestire automaticamente il caso "colonna creata su DB con utenti
+    esistenti" (così non restano NULL). Questa funzione è una seconda rete
+    di sicurezza nel caso in cui la colonna esista già con valori NULL.
+    """
+    from app.models.app_setting import AppSetting
+    from app.models.user import User
+    db = SessionLocal()
+    try:
+        flag = db.query(AppSetting).filter(
+            AppSetting.key == "email_verified_backfilled"
+        ).first()
+        if flag is not None:
+            return  # Già fatto
+
+        # Allinea ogni utente che ancora non ha il flag impostato — non
+        # tocchiamo quelli che eventualmente l'avessero già a False (es. test).
+        # In pratica per il primo run su un DB esistente questo è no-op
+        # perché la colonna è nata con DEFAULT TRUE.
+        updated = (
+            db.query(User)
+            .filter(User.email_verified.is_(None))
+            .update({User.email_verified: True}, synchronize_session=False)
+        )
+        db.add(AppSetting(key="email_verified_backfilled", value="true"))
+        db.commit()
+        print(f"[EmailVerify] Backfill iniziale: marcati {updated} utenti come verified")
+    except Exception as e:
+        print(f"[EmailVerify] Errore backfill iniziale: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 def backfill_subscription_tracking_once():
@@ -153,6 +201,9 @@ def create_app() -> FastAPI:
 
         # ★ Allinea last_processed_expiry per gli utenti pre-esistenti, una volta
         backfill_subscription_tracking_once()
+
+        # ★ Grandfather utenti pre-esistenti rispetto alla verifica email
+        backfill_email_verified_once()
 
         # ★ Avvia lo scheduler GEX (idempotente: se già avviato, start() no-op)
         scheduler = GexScheduler(

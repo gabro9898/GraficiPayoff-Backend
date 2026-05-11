@@ -14,6 +14,60 @@ from datetime import datetime
 from html import escape
 
 
+def verification_email(
+    first_name: str,
+    verification_url: str,
+    expires_in_hours: int,
+) -> tuple[str, str, str]:
+    """Email di benvenuto + conferma indirizzo email.
+    Inviata al momento della registrazione (e al resend). Contiene il link
+    cliccabile che porta alla pagina di conferma sul landing.
+    """
+    safe_name = escape(first_name)
+    safe_url = escape(verification_url, quote=True)
+
+    subject = "Conferma il tuo indirizzo email — OptionTracker"
+
+    html = f"""\
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Conferma email OptionTracker</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 32px 24px;">
+  <h1 style="font-size: 22px; margin-bottom: 16px;">Ciao {safe_name},</h1>
+  <p>Benvenuto in <strong>OptionTracker</strong>.</p>
+  <p>Per completare la registrazione e attivare il tuo account, conferma il
+     tuo indirizzo email cliccando il pulsante qui sotto:</p>
+  <p style="text-align: center; margin: 28px 0;">
+    <a href="{safe_url}" style="display: inline-block; background: #4f6ef7; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600;">Conferma email</a>
+  </p>
+  <p style="color: #666; font-size: 14px;">
+     Se il pulsante non funziona, copia e incolla questo link nel browser:<br>
+     <a href="{safe_url}" style="color: #4f6ef7; word-break: break-all;">{safe_url}</a>
+  </p>
+  <p style="color: #666; font-size: 14px;">Il link scade tra <strong>{expires_in_hours} ore</strong>.</p>
+  <p style="color: #666; font-size: 14px;">Se non hai creato tu questo account, ignora questa email.</p>
+  <p>— OptionTracker</p>
+</body>
+</html>
+"""
+
+    text = (
+        f"Ciao {first_name},\n\n"
+        "Benvenuto in OptionTracker.\n\n"
+        "Per completare la registrazione e attivare il tuo account, conferma il "
+        "tuo indirizzo email aprendo questo link:\n\n"
+        f"{verification_url}\n\n"
+        f"Il link scade tra {expires_in_hours} ore.\n\n"
+        "Se non hai creato tu questo account, ignora questa email.\n\n"
+        "— OptionTracker\n"
+    )
+
+    return subject, html, text
+
+
 def welcome_email(first_name: str) -> tuple[str, str, str]:
     """Email di benvenuto inviata al momento della registrazione."""
     safe_name = escape(first_name)

@@ -32,7 +32,7 @@ class ContactController:
         )
         send_transactional_email(
             to_email=self.settings.BREVO_REPLY_TO,
-            to_name="OptionTracker — Founder",
+            to_name="Option Tracker — Founder",
             subject=subject,
             html_content=html,
             text_content=text,

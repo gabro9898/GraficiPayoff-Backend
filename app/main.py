@@ -161,7 +161,7 @@ def backfill_subscription_tracking_once():
 def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
-        description="Backend API for Options Payoff Tracker",
+        description="Backend API for Option Tracker",
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",

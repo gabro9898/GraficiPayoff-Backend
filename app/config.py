@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # App
-    APP_NAME: str = "Options Payoff Tracker"
+    APP_NAME: str = "Option Tracker"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173,app://."
 
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     # ★ Brevo (email transazionali)
     BREVO_API_KEY: str = ""
     BREVO_SENDER_EMAIL: str = "noreply@mailoptiontracker.optiontraders.it"
-    BREVO_SENDER_NAME: str = "OptionTracker"
+    BREVO_SENDER_NAME: str = "Option Tracker"
     BREVO_REPLY_TO: str = "gabriele.murru@optiontraders.it"
 
     # ★ Subscription scheduler

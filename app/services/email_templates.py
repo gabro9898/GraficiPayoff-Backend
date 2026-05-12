@@ -26,18 +26,18 @@ def verification_email(
     safe_name = escape(first_name)
     safe_url = escape(verification_url, quote=True)
 
-    subject = "Conferma il tuo indirizzo email — OptionTracker"
+    subject = "Conferma il tuo indirizzo email — Option Tracker"
 
     html = f"""\
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <title>Conferma email OptionTracker</title>
+  <title>Conferma email Option Tracker</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 32px 24px;">
   <h1 style="font-size: 22px; margin-bottom: 16px;">Ciao {safe_name},</h1>
-  <p>Benvenuto in <strong>OptionTracker</strong>.</p>
+  <p>Benvenuto in <strong>Option Tracker</strong>.</p>
   <p>Per completare la registrazione e attivare il tuo account, conferma il
      tuo indirizzo email cliccando il pulsante qui sotto:</p>
   <p style="text-align: center; margin: 28px 0;">
@@ -49,20 +49,20 @@ def verification_email(
   </p>
   <p style="color: #666; font-size: 14px;">Il link scade tra <strong>{expires_in_hours} ore</strong>.</p>
   <p style="color: #666; font-size: 14px;">Se non hai creato tu questo account, ignora questa email.</p>
-  <p>— OptionTracker</p>
+  <p>— Option Tracker</p>
 </body>
 </html>
 """
 
     text = (
         f"Ciao {first_name},\n\n"
-        "Benvenuto in OptionTracker.\n\n"
+        "Benvenuto in Option Tracker.\n\n"
         "Per completare la registrazione e attivare il tuo account, conferma il "
         "tuo indirizzo email aprendo questo link:\n\n"
         f"{verification_url}\n\n"
         f"Il link scade tra {expires_in_hours} ore.\n\n"
         "Se non hai creato tu questo account, ignora questa email.\n\n"
-        "— OptionTracker\n"
+        "— Option Tracker\n"
     )
 
     return subject, html, text
@@ -72,39 +72,39 @@ def welcome_email(first_name: str) -> tuple[str, str, str]:
     """Email di benvenuto inviata al momento della registrazione."""
     safe_name = escape(first_name)
 
-    subject = "Benvenuto in OptionTracker"
+    subject = "Benvenuto in Option Tracker"
 
     html = f"""\
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <title>Benvenuto in OptionTracker</title>
+  <title>Benvenuto in Option Tracker</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 32px 24px;">
   <h1 style="font-size: 22px; margin-bottom: 16px;">Ciao {safe_name},</h1>
-  <p>Benvenuto in <strong>OptionTracker</strong>.</p>
+  <p>Benvenuto in <strong>Option Tracker</strong>.</p>
   <p>Il tuo account è stato creato. Da adesso puoi accedere all'app, costruire i
      tuoi grafici di payoff, monitorare il tuo portafoglio opzioni e analizzare
      il GEX dei principali sottostanti.</p>
   <p>Se hai domande, dubbi, o trovi qualcosa che non funziona, rispondi
      direttamente a questa email: arriva sulla mia casella personale e ti
      risponderò io.</p>
-  <p>Buon trading,<br>Gabriele — OptionTracker</p>
+  <p>Buon trading,<br>Gabriele — Option Tracker</p>
 </body>
 </html>
 """
 
     text = (
         f"Ciao {first_name},\n\n"
-        "Benvenuto in OptionTracker.\n\n"
+        "Benvenuto in Option Tracker.\n\n"
         "Il tuo account è stato creato. Da adesso puoi accedere all'app, "
         "costruire i tuoi grafici di payoff, monitorare il tuo portafoglio "
         "opzioni e analizzare il GEX dei principali sottostanti.\n\n"
         "Se hai domande, dubbi, o trovi qualcosa che non funziona, rispondi "
         "direttamente a questa email: arriva sulla mia casella personale e ti "
         "risponderò io.\n\n"
-        "Buon trading,\nGabriele — OptionTracker\n"
+        "Buon trading,\nGabriele — Option Tracker\n"
     )
 
     return subject, html, text
@@ -115,36 +115,36 @@ def password_reset_email(first_name: str, code: str, expires_in_minutes: int) ->
     safe_name = escape(first_name)
     safe_code = escape(code)
 
-    subject = "Reimposta la tua password OptionTracker"
+    subject = "Reimposta la tua password Option Tracker"
 
     html = f"""\
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <title>Reimposta password OptionTracker</title>
+  <title>Reimposta password Option Tracker</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 32px 24px;">
   <h1 style="font-size: 22px; margin-bottom: 16px;">Ciao {safe_name},</h1>
-  <p>Hai richiesto di reimpostare la password del tuo account OptionTracker.</p>
+  <p>Hai richiesto di reimpostare la password del tuo account Option Tracker.</p>
   <p>Inserisci questo codice nell'app per scegliere una nuova password:</p>
   <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 24px; margin: 24px 0; background: #f4f4f6; border-radius: 8px; font-family: 'Courier New', monospace;">
     {safe_code}
   </div>
   <p style="color: #666; font-size: 14px;">Il codice scade tra <strong>{expires_in_minutes} minuti</strong>.</p>
   <p style="color: #666; font-size: 14px;">Se non hai richiesto tu il reset, puoi ignorare questa email: la tua password attuale resta valida.</p>
-  <p>— OptionTracker</p>
+  <p>— Option Tracker</p>
 </body>
 </html>
 """
 
     text = (
         f"Ciao {first_name},\n\n"
-        "Hai richiesto di reimpostare la password del tuo account OptionTracker.\n\n"
+        "Hai richiesto di reimpostare la password del tuo account Option Tracker.\n\n"
         f"Codice: {code}\n\n"
         f"Inseriscilo nell'app entro {expires_in_minutes} minuti per scegliere una nuova password.\n\n"
         "Se non hai richiesto tu il reset, ignora questa email: la tua password attuale resta valida.\n\n"
-        "— OptionTracker\n"
+        "— Option Tracker\n"
     )
 
     return subject, html, text
@@ -170,7 +170,7 @@ def payment_confirmed_email(
     expiry_str = _format_italian_date(expiry_date)
     safe_url = escape(renewal_url, quote=True)
 
-    subject = "Pagamento ricevuto — il tuo abbonamento OptionTracker è attivo"
+    subject = "Pagamento ricevuto — il tuo abbonamento Option Tracker è attivo"
 
     html = f"""\
 <!DOCTYPE html>
@@ -182,9 +182,9 @@ def payment_confirmed_email(
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 32px 24px;">
   <h1 style="font-size: 22px; margin-bottom: 16px;">Ciao {safe_name},</h1>
   <p>Abbiamo ricevuto il tuo pagamento. Grazie!</p>
-  <p>Il tuo abbonamento OptionTracker è attivo fino al <strong>{expiry_str}</strong>.</p>
+  <p>Il tuo abbonamento Option Tracker è attivo fino al <strong>{expiry_str}</strong>.</p>
   <p>Da adesso puoi accedere a tutte le funzionalità dell'app senza limitazioni.</p>
-  <p style="margin-top: 28px;">Buon trading,<br>— OptionTracker</p>
+  <p style="margin-top: 28px;">Buon trading,<br>— Option Tracker</p>
   <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 28px 0;">
   <p style="color: #888; font-size: 12px;">
     Hai domande sul tuo abbonamento? Rispondi direttamente a questa email.
@@ -197,9 +197,9 @@ def payment_confirmed_email(
     text = (
         f"Ciao {first_name},\n\n"
         "Abbiamo ricevuto il tuo pagamento. Grazie!\n\n"
-        f"Il tuo abbonamento OptionTracker è attivo fino al {expiry_str}.\n\n"
+        f"Il tuo abbonamento Option Tracker è attivo fino al {expiry_str}.\n\n"
         "Da adesso puoi accedere a tutte le funzionalità dell'app senza limitazioni.\n\n"
-        "Buon trading,\n— OptionTracker\n\n"
+        "Buon trading,\n— Option Tracker\n\n"
         f"Per gestire l'abbonamento: {renewal_url}\n"
     )
 
@@ -219,46 +219,46 @@ def subscription_expiring_email(
     safe_url = escape(renewal_url, quote=True)
 
     if days_remaining == 1:
-        subject = "Ultimo giorno: il tuo abbonamento OptionTracker scade domani"
+        subject = "Ultimo giorno: il tuo abbonamento Option Tracker scade domani"
         urgency_intro = (
-            "Ti scriviamo perché il tuo abbonamento OptionTracker scade <strong>domani</strong>. "
+            "Ti scriviamo perché il tuo abbonamento Option Tracker scade <strong>domani</strong>. "
             "Per non perdere l'accesso all'app, rinnova oggi."
         )
         cta_label = "Rinnova ora"
         urgency_intro_text = (
-            "Ti scriviamo perché il tuo abbonamento OptionTracker scade DOMANI. "
+            "Ti scriviamo perché il tuo abbonamento Option Tracker scade DOMANI. "
             "Per non perdere l'accesso all'app, rinnova oggi."
         )
     elif days_remaining == 2:
-        subject = "Mancano 2 giorni alla scadenza del tuo abbonamento OptionTracker"
+        subject = "Mancano 2 giorni alla scadenza del tuo abbonamento Option Tracker"
         urgency_intro = (
-            "Il tuo abbonamento OptionTracker scade <strong>tra 2 giorni</strong> "
+            "Il tuo abbonamento Option Tracker scade <strong>tra 2 giorni</strong> "
             f"(il {expiry_str})."
         )
         cta_label = "Rinnova ora"
         urgency_intro_text = (
-            f"Il tuo abbonamento OptionTracker scade tra 2 giorni (il {expiry_str})."
+            f"Il tuo abbonamento Option Tracker scade tra 2 giorni (il {expiry_str})."
         )
     elif days_remaining == 3:
-        subject = "Mancano 3 giorni alla scadenza del tuo abbonamento OptionTracker"
+        subject = "Mancano 3 giorni alla scadenza del tuo abbonamento Option Tracker"
         urgency_intro = (
-            "Il tuo abbonamento OptionTracker scade <strong>tra 3 giorni</strong> "
+            "Il tuo abbonamento Option Tracker scade <strong>tra 3 giorni</strong> "
             f"(il {expiry_str}). Ti consigliamo di rinnovarlo per non interrompere l'accesso."
         )
         cta_label = "Rinnova ora"
         urgency_intro_text = (
-            f"Il tuo abbonamento OptionTracker scade tra 3 giorni (il {expiry_str}). "
+            f"Il tuo abbonamento Option Tracker scade tra 3 giorni (il {expiry_str}). "
             "Ti consigliamo di rinnovarlo per non interrompere l'accesso."
         )
     else:  # 7 giorni (o altri valori, fallback)
-        subject = "Manca una settimana alla scadenza del tuo abbonamento OptionTracker"
+        subject = "Manca una settimana alla scadenza del tuo abbonamento Option Tracker"
         urgency_intro = (
-            f"Il tuo abbonamento OptionTracker scade <strong>tra {days_remaining} giorni</strong>, "
+            f"Il tuo abbonamento Option Tracker scade <strong>tra {days_remaining} giorni</strong>, "
             f"il {expiry_str}. Volevamo avvisarti per tempo, così puoi rinnovarlo con calma."
         )
         cta_label = "Rinnova abbonamento"
         urgency_intro_text = (
-            f"Il tuo abbonamento OptionTracker scade tra {days_remaining} giorni, il {expiry_str}. "
+            f"Il tuo abbonamento Option Tracker scade tra {days_remaining} giorni, il {expiry_str}. "
             "Volevamo avvisarti per tempo, così puoi rinnovarlo con calma."
         )
 
@@ -279,7 +279,7 @@ def subscription_expiring_email(
   <p style="color: #666; font-size: 14px;">
     Se hai già rinnovato, ignora questa email: ricevuto il pagamento, la scadenza si aggiorna automaticamente.
   </p>
-  <p style="margin-top: 28px;">— OptionTracker</p>
+  <p style="margin-top: 28px;">— Option Tracker</p>
   <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 28px 0;">
   <p style="color: #888; font-size: 12px;">
     Domande? Rispondi direttamente a questa email.
@@ -294,7 +294,7 @@ def subscription_expiring_email(
         f"Per rinnovare: {renewal_url}\n\n"
         "Se hai già rinnovato, ignora questa email: ricevuto il pagamento, "
         "la scadenza si aggiorna automaticamente.\n\n"
-        "— OptionTracker\n"
+        "— Option Tracker\n"
     )
 
     return subject, html, text
@@ -330,7 +330,7 @@ def contact_message_email(
   <title>{subject}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; max-width: 620px; margin: 0 auto; padding: 32px 24px;">
-  <h1 style="font-size: 20px; margin: 0 0 8px;">Nuovo messaggio dalla chat OptionTracker</h1>
+  <h1 style="font-size: 20px; margin: 0 0 8px;">Nuovo messaggio dalla chat Option Tracker</h1>
   <p style="color: #666; margin: 0 0 24px; font-size: 14px;">
     Per rispondere all'utente: premi semplicemente "Rispondi" — il messaggio andrà direttamente a {safe_email}.
   </p>
@@ -351,14 +351,14 @@ def contact_message_email(
 
   <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 28px 0;">
   <p style="color: #aaa; font-size: 12px; margin: 0;">
-    Email generata automaticamente dalla chat di contatto OptionTracker.
+    Email generata automaticamente dalla chat di contatto Option Tracker.
   </p>
 </body>
 </html>
 """
 
     text = (
-        f"Nuovo messaggio dalla chat OptionTracker\n\n"
+        f"Nuovo messaggio dalla chat Option Tracker\n\n"
         f"Da: {user_first_name} {user_last_name} <{user_email}>\n"
         f"Registrato il: {registered_at}\n\n"
         "Messaggio:\n"

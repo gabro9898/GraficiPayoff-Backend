@@ -1,11 +1,24 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field
+from typing import Annotated
+from pydantic import BaseModel, BeforeValidator, EmailStr, Field
+
+
+# Normalizza la mail in entrata: strip + lowercase. Risolve il bug per cui
+# utenti registrati con case misto (es. "ANTONIOGIAMMARIA@gmail.com") non
+# riuscivano più a loggare quando digitavano la variante lowercase.
+# BeforeValidator gira PRIMA di EmailStr, quindi spazi/case vengono puliti
+# prima della validazione del formato.
+def _normalize_email(v: object) -> object:
+    return v.strip().lower() if isinstance(v, str) else v
+
+
+LowerEmail = Annotated[EmailStr, BeforeValidator(_normalize_email)]
 
 
 # --- Request schemas ---
 
 class UserRegisterRequest(BaseModel):
-    email: EmailStr
+    email: LowerEmail
     password: str = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
@@ -15,7 +28,7 @@ class UserRegisterRequest(BaseModel):
 
 
 class UserLoginRequest(BaseModel):
-    email: EmailStr
+    email: LowerEmail
     password: str
 
 
@@ -55,11 +68,11 @@ class RefreshTokenRequest(BaseModel):
 # --- Password reset schemas ---
 
 class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+    email: LowerEmail
 
 
 class ResetPasswordRequest(BaseModel):
-    email: EmailStr
+    email: LowerEmail
     code: str = Field(min_length=6, max_length=6)
     new_password: str = Field(min_length=8, max_length=128)
 
@@ -71,7 +84,7 @@ class VerifyEmailRequest(BaseModel):
 
 
 class ResendVerificationRequest(BaseModel):
-    email: EmailStr
+    email: LowerEmail
 
 
 class RegisterResponse(BaseModel):

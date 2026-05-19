@@ -81,6 +81,10 @@ class TradeService:
 
         # P&L lordo + commissioni dei trade
         for t in strategy.trades:
+            # ★ v15: salta le pending legs — sono "desideri" non eseguiti,
+            # non contribuiscono al P&L finché non vengono fillate.
+            if getattr(t, 'is_pending', False):
+                continue
             # Commissioni di apertura: pagate sempre, anche se la leg è ancora OPEN
             total_pnl -= (t.commission or 0.0)
             # P&L + commissione di chiusura solo se CLOSED

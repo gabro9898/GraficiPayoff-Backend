@@ -18,6 +18,7 @@ from app.models.app_setting import AppSetting  # noqa: F401
 from app.models.broker_token import BrokerToken  # noqa: F401
 from app.models.gex_data import GexData  # noqa: F401
 from app.models.email_verification import EmailVerificationToken  # noqa: F401
+from app.models.strategy_template import StrategyTemplate, StrategyTemplateLeg  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

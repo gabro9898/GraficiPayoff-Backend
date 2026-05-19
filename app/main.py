@@ -16,6 +16,7 @@ from app.api.routes.app_info import router as app_info_router
 from app.api.routes.stripe import router as stripe_router
 from app.api.routes.gex import router as gex_router  # ★ GEX
 from app.api.routes.contact import router as contact_router  # ★ Chat contatto
+from app.api.routes.strategy_template import router as strategy_template_router  # ★ Preset strategia
 
 # ★ Import dei modelli per registrarli sul Base.metadata
 # (se non vengono importati da qualche parte, create_all non li vede)
@@ -23,6 +24,8 @@ from app.models import gex_data  # noqa: F401
 from app.models import password_reset  # noqa: F401
 from app.models import subscription_reminder_log  # noqa: F401
 from app.models import email_verification  # noqa: F401
+from app.models import oauth_state  # noqa: F401  ★ Trusted Partner OAuth: state CSRF persistito
+from app.models import strategy_template  # noqa: F401  ★ Preset strategia precompilati
 
 from app.services import gex_scheduler as gex_scheduler_module  # ★ GEX scheduler
 from app.services.gex_scheduler import GexScheduler
@@ -186,6 +189,7 @@ def create_app() -> FastAPI:
     app.include_router(stripe_router, prefix="/api/v1")
     app.include_router(gex_router, prefix="/api/v1")  # ★ GEX
     app.include_router(contact_router, prefix="/api/v1")  # ★ Chat contatto
+    app.include_router(strategy_template_router, prefix="/api/v1")  # ★ Preset strategia
 
     # ★ Subscription scheduler: tenuto in chiusura nel scope di create_app
     # così l'handler di shutdown lo trova.

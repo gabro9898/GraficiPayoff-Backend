@@ -148,12 +148,12 @@ def get_status(
 
 
 @router.post("/disconnect", response_model=BrokerDisconnectResponse)
-def disconnect(
+async def disconnect(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service = TastyTradeService(db)
-    result = service.disconnect(current_user.id)
+    result = await service.disconnect(current_user.id)
     return {"broker_id": "tastytrade", "disconnected": result}
 
 
@@ -185,6 +185,30 @@ async def get_option_chains(
 ):
     service = TastyTradeService(db)
     return await service.get_option_chains(current_user.id, symbol.upper())
+
+
+# ═══════════════ Futures ═══════════════
+
+@router.get("/futures/{root}")
+async def get_futures_list(
+    root: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lista contratti future per un product code (es. 'ES', '/ES', 'NQ', 'CL')."""
+    service = TastyTradeService(db)
+    return await service.get_futures(current_user.id, root)
+
+
+@router.get("/future-option-chains/{symbol}")
+async def get_future_option_chains(
+    symbol: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Option chain nested di un future product."""
+    service = TastyTradeService(db)
+    return await service.get_future_option_chains(current_user.id, symbol)
 
 
 @router.get("/symbols/search/{query}")

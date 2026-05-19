@@ -1,6 +1,8 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/controllers/strategy_controller.py
+# v4: + MODEL feature: get_all_models, create_model,
+#     replace_model_legs, fill_model
 # v3: + settle_expired_legs + get_strategies_with_expired_legs
 #     (per il nuovo flow di auto-settle parziale leg-by-leg)
 # ============================================================
@@ -13,6 +15,9 @@ from app.schemas.strategy import (
     StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
     StrategySettleExpiredLegsRequest,
     StrategyUpdateLegsRequest, StrategyCloseLegRequest,
+    StrategyCreateModelRequest, StrategyReplaceModelLegsRequest,
+    StrategyFillModelRequest,
+    StrategyCreateRequest2, StrategySaveLegsRequest, StrategyFillPendingLegRequest,
     StrategyResponse, StrategyWithTradesResponse,
 )
 from app.schemas.underlying_position import (
@@ -110,3 +115,81 @@ class StrategyController:
     def delete(self, strategy_id: str, current_user: User) -> dict:
         self.strategy_service.delete(strategy_id, current_user.id)
         return {"message": "Strategy deleted successfully"}
+
+    # ═══════════════════════════════════════════════════════════
+    # ★ v4: MODEL feature
+    # ═══════════════════════════════════════════════════════════
+
+    def get_all_models(self, current_user: User) -> list[StrategyWithTradesResponse]:
+        models = self.strategy_service.get_all_models_by_user(current_user.id)
+        return [StrategyWithTradesResponse.model_validate(s) for s in models]
+
+    def create_model(self, current_user: User, data: StrategyCreateModelRequest) -> StrategyWithTradesResponse:
+        strategy = self.strategy_service.create_model(current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy.id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    def replace_model_legs(
+        self, strategy_id: str, current_user: User,
+        data: StrategyReplaceModelLegsRequest,
+    ) -> dict:
+        _, assigned_ids = self.strategy_service.replace_model_legs(
+            strategy_id, current_user.id, data,
+        )
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return {
+            "strategy": StrategyWithTradesResponse.model_validate(strategy),
+            "assigned_trade_ids": assigned_ids,
+        }
+
+    def fill_model(
+        self, strategy_id: str, current_user: User,
+        data: StrategyFillModelRequest,
+    ) -> StrategyWithTradesResponse:
+        self.strategy_service.fill_model(strategy_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    # ═══════════════════════════════════════════════════════════
+    # ★ v15: PENDING LEGS — vivono nella stessa Strategy con is_pending=True
+    # ═══════════════════════════════════════════════════════════
+
+    def create_with_pending(
+        self, current_user: User, data: StrategyCreateRequest2,
+    ) -> StrategyWithTradesResponse:
+        strategy = self.strategy_service.create_with_pending(current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy.id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    def save_legs(
+        self, strategy_id: str, current_user: User, data: StrategySaveLegsRequest,
+    ) -> StrategyWithTradesResponse:
+        self.strategy_service.save_legs(strategy_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    def replace_pending_legs(
+        self, strategy_id: str, current_user: User, data,
+    ) -> dict:
+        _, assigned_ids = self.strategy_service.replace_pending_legs(
+            strategy_id, current_user.id, data,
+        )
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return {
+            "strategy": StrategyWithTradesResponse.model_validate(strategy),
+            "assigned_trade_ids": assigned_ids,
+        }
+
+    def fill_pending_leg(
+        self, strategy_id: str, leg_id: str, current_user: User,
+        data: StrategyFillPendingLegRequest,
+    ) -> StrategyWithTradesResponse:
+        self.strategy_service.fill_pending_leg(strategy_id, leg_id, current_user.id, data)
+        strategy = self.strategy_service.get_by_id_with_trades(strategy_id, current_user.id)
+        return StrategyWithTradesResponse.model_validate(strategy)
+
+    def delete_pending_leg(
+        self, strategy_id: str, leg_id: str, current_user: User,
+    ) -> dict:
+        self.strategy_service.delete_pending_leg(strategy_id, leg_id, current_user.id)
+        return {"message": "Pending leg deleted"}

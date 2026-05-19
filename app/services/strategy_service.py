@@ -1,5 +1,10 @@
 # ============================================================
 # Percorso: app/services/strategy_service.py
+# v13: + Strategy MODEL feature:
+#      - create_model: crea strategia con status=MODEL, leg senza prezzi
+#      - replace_model_legs: replace totale delle leg (auto-save dal FE)
+#      - fill_model: converte MODEL → OPEN con prezzi/greche
+#      - get_all_models_by_user: lista MODEL + cleanup on-the-fly scaduti
 # v12: + settle_expired_legs (settle parziale leg-by-leg, multi-expiry)
 #      + get_strategies_with_expired_legs (lookup per il nuovo auto-settle)
 #
@@ -21,6 +26,8 @@ from app.schemas.strategy import (
     StrategyAddLegsRequest, StrategyCloseRequest, StrategySettleRequest,
     StrategySettleExpiredLegsRequest,
     StrategyUpdateLegsRequest, StrategyCloseLegRequest,
+    StrategyCreateModelRequest, StrategyReplaceModelLegsRequest,
+    StrategyFillModelRequest,
 )
 from app.schemas.underlying_position import (
     UnderlyingPositionCreateRequest, UnderlyingPositionCloseRequest,
@@ -161,6 +168,10 @@ class StrategyService:
             if leg_update.gamma is not None: trade.gamma = leg_update.gamma
             if leg_update.theta is not None: trade.theta = leg_update.theta
             if leg_update.vega is not None: trade.vega = leg_update.vega
+            # ★ Commissione INCREMENTALE: sommata a quella esistente del trade
+            # (es. una leg attivata da disabled paga commissione di esecuzione).
+            if leg_update.commission is not None and leg_update.commission > 0:
+                trade.commission = (trade.commission or 0.0) + leg_update.commission
         self.db.commit()
         self.trade_service.recalculate_strategy_pnl(strategy.id)
         self.db.refresh(strategy)
@@ -221,6 +232,16 @@ class StrategyService:
         trade.close_premium = data.close_premium
         trade.close_date = now
         trade.close_commission = getattr(data, 'close_commission', 0.0) or 0.0
+
+        # ★ Auto-close strategy: se dopo questo close TUTTI i trade e tutti gli
+        # underlying sono CLOSED, la strategia non ha più posizioni aperte → la
+        # marchiamo CLOSED. Prima il backend lasciava status=OPEN anche dopo
+        # aver chiuso l'ultima leg → UI mostrava strategie "fantasma" aperte
+        # con expiry "-" (perché _recompute_earliest_expiry guarda solo open).
+        all_trades_closed = all(t.status == TradeStatus.CLOSED for t in strategy.trades)
+        all_ups_closed = all(up.status == UPStatus.CLOSED for up in strategy.underlying_positions)
+        if all_trades_closed and all_ups_closed and (strategy.trades or strategy.underlying_positions):
+            strategy.status = "CLOSED"
 
         self._recompute_earliest_expiry(strategy)
         self.db.commit()
@@ -407,3 +428,280 @@ class StrategyService:
     def delete(self, strategy_id: str, user_id: str) -> None:
         strategy = self.get_by_id(strategy_id, user_id)
         self.strategy_repo.delete(strategy)
+
+    # ═══════════════════════════════════════════════════════════
+    # ★ v13: MODEL feature
+    # ═══════════════════════════════════════════════════════════
+
+    def _create_model_trade_from_leg(self, strategy_id: str, ticker: str, leg) -> Trade:
+        """Trade dentro una strategia MODEL: senza premium/greche, frozen=False."""
+        return Trade(
+            strategy_id=strategy_id,
+            ticker=ticker,
+            option_type=leg.option_type,
+            direction=leg.direction,
+            strike=leg.strike,
+            premium=None,             # ★ MODEL: prezzo non ancora noto
+            quantity=leg.quantity,
+            expiry=leg.expiry,
+            enabled=leg.enabled,
+            frozen=False,             # ★ MODEL: modificabile
+            trading_class=getattr(leg, 'trading_class', None),
+            commission=0.0,
+            open_date=datetime.now(timezone.utc),
+        )
+
+    def _verify_parent_strategy(self, parent_id: str | None, user_id: str) -> None:
+        if not parent_id:
+            return
+        parent = self.strategy_repo.find_by_id(parent_id)
+        if not parent:
+            raise NotFoundException(f"Parent strategy {parent_id}")
+        if parent.user_id != user_id:
+            raise ForbiddenException()
+        if parent.status != "OPEN":
+            # Solo strategie OPEN possono avere model annidati
+            raise ForbiddenException()
+
+    def get_all_models_by_user(self, user_id: str) -> list[Strategy]:
+        # Cleanup on-the-fly: cancella MODEL con tutte le leg scadute
+        self.strategy_repo.delete_expired_models_by_user(user_id)
+        return self.strategy_repo.find_all_models_by_user(user_id)
+
+    def create_model(self, user_id: str, data: StrategyCreateModelRequest) -> Strategy:
+        self._verify_account_ownership(data.account_id, user_id)
+        self._verify_parent_strategy(data.parent_strategy_id, user_id)
+
+        next_number = self.strategy_repo.get_next_number(user_id)
+        earliest = min((leg.expiry for leg in data.legs), default=None)
+
+        strategy = Strategy(
+            user_id=user_id, account_id=data.account_id, number=next_number,
+            name=data.name, description=data.description, ticker=data.ticker,
+            fill_price=None, contract_multiplier=data.contract_multiplier,
+            earliest_expiry=earliest, status="MODEL",
+            realized_pnl=0.0,
+            underlying_expiry=data.underlying_expiry,
+            parent_strategy_id=data.parent_strategy_id,
+        )
+        self.db.add(strategy)
+        self.db.flush()
+        for leg in data.legs:
+            self.db.add(self._create_model_trade_from_leg(strategy.id, data.ticker, leg))
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy
+
+    def replace_model_legs(
+        self, strategy_id: str, user_id: str,
+        data: StrategyReplaceModelLegsRequest,
+    ) -> tuple[Strategy, list[str]]:
+        """Auto-save: sostituisce TUTTE le leg di un MODEL.
+        Ritorna anche la lista degli ID assegnati (in ordine corrispondente a
+        data.legs) — il frontend li usa per promuovere le draft locali (ID
+        random) a leg "saved-" senza dover ricaricare il MODEL completo."""
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        if strategy.status != "MODEL":
+            raise ForbiddenException()
+
+        # Cancella tutti i trade esistenti
+        for trade in list(strategy.trades):
+            self.db.delete(trade)
+        self.db.flush()
+
+        # Crea i nuovi trade dai leg passati e tiene gli ID assegnati in ordine.
+        # NOTA: l'id (UUID) viene assegnato da SQLAlchemy al flush, non al
+        # db.add() — quindi flush() prima di leggere t.id.
+        new_trades = []
+        for leg in data.legs:
+            t = self._create_model_trade_from_leg(strategy.id, strategy.ticker, leg)
+            self.db.add(t)
+            new_trades.append(t)
+        self.db.flush()
+        assigned_ids: list[str] = [t.id for t in new_trades]
+
+        strategy.earliest_expiry = min((leg.expiry for leg in data.legs), default=None)
+        self.db.commit()
+        self.db.refresh(strategy)
+        return strategy, assigned_ids
+
+    def fill_model(
+        self, strategy_id: str, user_id: str,
+        data: StrategyFillModelRequest,
+    ) -> Strategy:
+        """Converte un MODEL in strategia OPEN salvando prezzi/greche delle leg."""
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        if strategy.status != "MODEL":
+            raise ForbiddenException()
+
+        # Cancella i trade del MODEL (placeholder senza prezzi)
+        for trade in list(strategy.trades):
+            self.db.delete(trade)
+        self.db.flush()
+
+        # Ricrea i trade come fillati (riusa il helper esistente)
+        for leg in data.legs:
+            self.db.add(self._create_trade_from_leg(strategy.id, strategy.ticker, leg))
+
+        strategy.status = "OPEN"
+        strategy.fill_price = data.fill_price
+        strategy.earliest_expiry = min(leg.expiry for leg in data.legs)
+        # Il model annidato perde il riferimento al parent una volta fillato:
+        # diventa una strategia OPEN indipendente.
+        strategy.parent_strategy_id = None
+
+        self.db.commit()
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
+        self.db.refresh(strategy)
+        return strategy
+
+    # ═══════════════════════════════════════════════════════════
+    # ★ v15: PENDING LEGS — vivono nella stessa Strategy con is_pending=True
+    # ═══════════════════════════════════════════════════════════
+
+    def _create_pending_trade(self, strategy_id: str, ticker: str, leg) -> Trade:
+        """Crea una pending leg (is_pending=True, frozen=False, premium=None)."""
+        return Trade(
+            strategy_id=strategy_id,
+            ticker=ticker,
+            option_type=leg.option_type,
+            direction=leg.direction,
+            strike=leg.strike,
+            premium=None,
+            quantity=leg.quantity,
+            expiry=leg.expiry,
+            enabled=getattr(leg, 'enabled', True),
+            frozen=False,
+            is_pending=True,
+            trading_class=getattr(leg, 'trading_class', None),
+            commission=0.0,
+            open_date=datetime.now(timezone.utc),
+        )
+
+    def create_with_pending(
+        self, user_id: str, data,
+    ) -> Strategy:
+        """Crea una nuova strategia OPEN con leg active (frozen=True) + leg
+        pending (is_pending=True) nella stessa Strategy."""
+        self._verify_account_ownership(data.account_id, user_id)
+        next_number = self.strategy_repo.get_next_number(user_id)
+        # earliest_expiry SOLO sulle active (le pending non contano)
+        active_expiries = [leg.expiry for leg in data.active_legs]
+        earliest_active = min(active_expiries) if active_expiries else None
+        strategy = Strategy(
+            user_id=user_id, account_id=data.account_id, number=next_number,
+            name=data.name, description=data.description, ticker=data.ticker,
+            fill_price=data.fill_price, contract_multiplier=data.contract_multiplier,
+            earliest_expiry=earliest_active, status="OPEN",
+            realized_pnl=0.0,
+            underlying_expiry=data.underlying_expiry,
+        )
+        self.db.add(strategy)
+        self.db.flush()
+        for leg in data.active_legs:
+            self.db.add(self._create_trade_from_leg(strategy.id, data.ticker, leg))
+        for leg in data.pending_legs:
+            self.db.add(self._create_pending_trade(strategy.id, data.ticker, leg))
+        self.db.commit()
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
+        self.db.refresh(strategy)
+        return strategy
+
+    def save_legs(
+        self, strategy_id: str, user_id: str, data,
+    ) -> Strategy:
+        """Aggiunge leg a una strategy OPEN: active → frozen Trade, pending →
+        is_pending Trade. Tutto nella stessa Strategy."""
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        for leg in data.active_legs:
+            self.db.add(self._create_trade_from_leg(strategy.id, strategy.ticker, leg))
+        for leg in data.pending_legs:
+            self.db.add(self._create_pending_trade(strategy.id, strategy.ticker, leg))
+        if data.active_legs:
+            active_expiries = [leg.expiry for leg in data.active_legs]
+            new_earliest = min(active_expiries)
+            if strategy.earliest_expiry is None or new_earliest < strategy.earliest_expiry:
+                strategy.earliest_expiry = new_earliest
+        self.db.commit()
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
+        self.db.refresh(strategy)
+        return strategy
+
+    def replace_pending_legs(
+        self, strategy_id: str, user_id: str, data,
+    ) -> tuple[Strategy, list[str]]:
+        """★ Auto-save: sostituisce TUTTE le pending leg di una strategia OPEN.
+        I trade fillati (is_pending=False, frozen=True) restano intatti.
+        Ritorna anche la lista degli ID assegnati (in ordine corrispondente a
+        data.legs) — il frontend li usa per promuovere le draft locali
+        (id random) a leg "pending-" senza dover ricaricare il trade."""
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+
+        # Cancella SOLO le pending esistenti — i fillati restano.
+        for trade in list(strategy.trades):
+            if trade.is_pending:
+                self.db.delete(trade)
+        self.db.flush()
+
+        # Ricrea le pending dai legs passati, tenendo gli ID assegnati in
+        # ordine. NOTA: l'id viene assegnato da SQLAlchemy al flush() — quindi
+        # flush prima di leggere t.id.
+        new_trades = []
+        for leg in data.legs:
+            t = self._create_pending_trade(strategy.id, strategy.ticker, leg)
+            self.db.add(t)
+            new_trades.append(t)
+        self.db.flush()
+        assigned_ids: list[str] = [t.id for t in new_trades]
+
+        self.db.commit()
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
+        self.db.refresh(strategy)
+        return strategy, assigned_ids
+
+    def fill_pending_leg(
+        self, strategy_id: str, leg_id: str, user_id: str, data,
+    ) -> Strategy:
+        """Trasforma una pending leg in trade attivo (in-place). Aggiorna
+        i campi premium/commission/greche e setta is_pending=False, frozen=True.
+        La leg resta nella stessa Strategy: niente spostamenti tra entità."""
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        leg = next((t for t in strategy.trades if t.id == leg_id), None)
+        if not leg:
+            raise NotFoundException(f"Leg {leg_id}")
+        if not leg.is_pending:
+            raise ForbiddenException()  # solo le pending possono essere fillate
+        leg.is_pending = False
+        leg.frozen = True
+        leg.enabled = True
+        leg.premium = data.premium
+        leg.commission = data.commission
+        leg.open_date = datetime.now(timezone.utc)
+        leg.delta = data.delta
+        leg.gamma = data.gamma
+        leg.theta = data.theta
+        leg.vega = data.vega
+        leg.implied_volatility = data.implied_volatility
+        # Aggiorna earliest_expiry del parent (ora include questa leg fillata)
+        open_expiries = [
+            t.expiry for t in strategy.trades
+            if not t.is_pending and t.status != TradeStatus.CLOSED and t.expiry is not None
+        ]
+        strategy.earliest_expiry = min(open_expiries) if open_expiries else None
+        self.db.commit()
+        self.trade_service.recalculate_strategy_pnl(strategy.id)
+        self.db.refresh(strategy)
+        return strategy
+
+    def delete_pending_leg(
+        self, strategy_id: str, leg_id: str, user_id: str,
+    ) -> None:
+        """Rimuove una pending leg dalla Strategy."""
+        strategy = self.get_by_id_with_trades(strategy_id, user_id)
+        leg = next((t for t in strategy.trades if t.id == leg_id), None)
+        if not leg:
+            raise NotFoundException(f"Leg {leg_id}")
+        if not leg.is_pending:
+            raise ForbiddenException()  # solo pending possono essere deleted via questo endpoint
+        self.db.delete(leg)
+        self.db.commit()

@@ -49,7 +49,9 @@ class Trade(Base):
     option_type: Mapped[OptionType] = mapped_column(SAEnum(OptionType), nullable=False)
     direction: Mapped[Direction] = mapped_column(SAEnum(Direction), nullable=False)
     strike: Mapped[float] = mapped_column(Float, nullable=False)
-    premium: Mapped[float] = mapped_column(Float, nullable=False)
+    # ★ v7: premium nullable per supportare le leg dentro le strategie MODEL
+    # (disegnate ma non ancora fillate, quindi senza prezzo di entrata).
+    premium: Mapped[float | None] = mapped_column(Float, nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     expiry: Mapped[date] = mapped_column(Date, nullable=False)
 
@@ -72,6 +74,12 @@ class Trade(Base):
     # --- Leg state ---
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     frozen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # ★ v8: pending leg = leg desiderata ma non ancora eseguita. Vive dentro
+    # la stessa Strategy del trade attivo (NON in un MODEL annidato come prima).
+    # is_pending=True implica frozen=False, premium=None, status=OPEN.
+    # Esclusa dal calcolo realized_pnl. Quando viene "fillata" diventa una
+    # normale trade leg: is_pending=False, frozen=True, premium=<fill>.
+    is_pending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # --- Trade metadata ---
     status: Mapped[TradeStatus] = mapped_column(

@@ -1,6 +1,7 @@
 # ============================================================
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/trade.py
+# v8: TradeResponse.premium ora opzionale (per leg dentro strategie MODEL).
 # v7: + settlement_price in TradeResponse (per visualizzare nel
 #     frontend a quale prezzo è stata settled la leg).
 # ============================================================
@@ -69,11 +70,12 @@ class TradeResponse(BaseModel):
     option_type: OptionType
     direction: Direction
     strike: float
-    premium: float
+    premium: float | None  # ★ v8: null per leg dentro strategie MODEL
     quantity: int
     expiry: date
     enabled: bool
     frozen: bool
+    is_pending: bool = False  # ★ v15: pending leg (desiderata non eseguita)
     trading_class: str | None
     commission: float
     close_commission: float

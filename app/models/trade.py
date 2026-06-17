@@ -111,7 +111,7 @@ class Trade(Base):
 
     @property
     def pnl(self) -> float | None:
-        if self.close_premium is None:
+        if self.close_premium is None or self.premium is None:
             return None
         multiplier = 1 if self.direction == Direction.BUY else -1
         # ★ v5: usa contract_multiplier della strategy invece di 100 hardcoded

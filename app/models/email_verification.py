@@ -27,7 +27,11 @@ class EmailVerificationToken(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # ★ Audit 2026-05-23: index=True su token_hash per O(1) lookup.
+    # Prima verify_email scannava tutti i token attivi e faceva bcrypt-verify
+    # uno per uno — O(N) e vettore di DoS CPU. Ora si usa SHA-256 e si
+    # cerca direttamente sul hash indicizzato.
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

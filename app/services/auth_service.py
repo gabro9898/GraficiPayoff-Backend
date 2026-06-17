@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,18 @@ from app.utils.security import (
     hash_password,
     verify_password,
 )
+
+
+def _hash_verification_token(token: str) -> str:
+    """Hash SHA-256 esadecimale per i token di verifica email.
+
+    Audit 2026-05-23: bcrypt qui era inappropriato — i token sono random ad
+    alta entropia (≥32 byte URL-safe), non password, e bcrypt impedisce
+    l'indicizzazione del lookup in DB (ogni hash è diverso anche per lo
+    stesso input). Con SHA-256 + indice su token_hash il lookup è O(1)
+    invece di O(N)+bcrypt-per-row (che era un vettore DoS CPU).
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 # Configurazione del flusso password-reset
@@ -198,7 +211,7 @@ class AuthService:
         token = secrets.token_urlsafe(VERIFICATION_TOKEN_BYTES)
         record = EmailVerificationToken(
             user_id=user.id,
-            token_hash=hash_password(token),
+            token_hash=_hash_verification_token(token),  # ★ Audit 2026-05-23: SHA-256, non bcrypt
             expires_at=datetime.now(timezone.utc)
             + timedelta(hours=VERIFICATION_TOKEN_EXPIRY_HOURS),
         )
@@ -209,27 +222,26 @@ class AuthService:
         """Verifica un token email. Solleva InvalidVerificationTokenException
         se il token è scaduto, già usato, o non corrisponde a nessun utente.
         Se valido, marca user.email_verified=True e brucia il token.
+
+        Audit 2026-05-23: lookup O(1) per token_hash indicizzato (SHA-256).
+        Prima era O(N) con scan completo + bcrypt-verify per ogni token attivo,
+        vettore di DoS CPU verso /auth/verify-email.
+
+        ⚠️ Effetto migrazione: i token bcrypt-hashed eventualmente già in DB
+        (utenti registrati appena prima del deploy che non hanno ancora
+        cliccato il link) non saranno più riconosciuti. Gli utenti
+        richiederanno un nuovo link via /auth/resend-verification.
         """
-        # Il token è random URL-safe — dobbiamo confrontare per hash contro
-        # TUTTI i token attivi. Per scalare, l'ideale sarebbe usare un id
-        # prefissato nel token; per ora il volume è basso, scanniamo gli attivi.
-        from sqlalchemy import and_
-        candidates = (
+        token_hash = _hash_verification_token(token)
+        matching = (
             self.verification_repo.db.query(EmailVerificationToken)
             .filter(
-                and_(
-                    EmailVerificationToken.used_at.is_(None),
-                    EmailVerificationToken.expires_at > datetime.now(timezone.utc),
-                )
+                EmailVerificationToken.token_hash == token_hash,
+                EmailVerificationToken.used_at.is_(None),
+                EmailVerificationToken.expires_at > datetime.now(timezone.utc),
             )
-            .all()
+            .first()
         )
-
-        matching: EmailVerificationToken | None = None
-        for cand in candidates:
-            if verify_password(token, cand.token_hash):
-                matching = cand
-                break
 
         if matching is None:
             raise InvalidVerificationTokenException()

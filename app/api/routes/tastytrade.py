@@ -2,7 +2,12 @@
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/api/routes/tastytrade.py
 # v4: fix callback — code/state opzionali, gestione errore pulita
+# v5: fix XSS riflesso — escape html.escape() e json.dumps() sui valori
+#     utente nei response HTMLResponse (audit 2026-05-23).
 # ============================================================
+
+import html
+import json
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
@@ -61,11 +66,11 @@ async def oauth_callback(
         <body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0f;color:#e4e4ee;">
             <div style="text-align:center;">
                 <h2 style="color:#ff4757;">✗ Autorizzazione fallita</h2>
-                <p style="color:#8888a0;">{err_msg[:200]}</p>
+                <p style="color:#8888a0;">{html.escape(err_msg[:200])}</p>
                 <p style="color:#55556a;font-size:0.85rem;">Chiudi questa finestra e riprova.</p>
                 <script>
                     if (window.opener) {{
-                        window.opener.postMessage({{ type: 'tastytrade-auth-error', error: '{err_msg[:100]}' }}, '*');
+                        window.opener.postMessage({{ type: 'tastytrade-auth-error', error: {json.dumps(err_msg[:100])} }}, '*');
                         setTimeout(() => window.close(), 3000);
                     }}
                 </script>
@@ -103,10 +108,10 @@ async def oauth_callback(
         <body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0f;color:#e4e4ee;">
             <div style="text-align:center;">
                 <h2 style="color:#ff4757;">✗ Autorizzazione fallita</h2>
-                <p style="color:#8888a0;">Errore: {str(e)[:200]}</p>
+                <p style="color:#8888a0;">Errore: {html.escape(str(e)[:200])}</p>
                 <script>
                     if (window.opener) {{
-                        window.opener.postMessage({{ type: 'tastytrade-auth-error', error: '{str(e)[:100]}' }}, '*');
+                        window.opener.postMessage({{ type: 'tastytrade-auth-error', error: {json.dumps(str(e)[:100])} }}, '*');
                         setTimeout(() => window.close(), 3000);
                     }}
                 </script>

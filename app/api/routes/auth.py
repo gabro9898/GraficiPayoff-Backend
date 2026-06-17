@@ -1,8 +1,9 @@
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy.orm import Session
 from urllib.parse import urlencode
 
 from app.config import get_settings
+from app.utils.rate_limit import limiter
 from app.database import get_db
 from app.controllers.auth_controller import AuthController
 from app.schemas.user import (
@@ -64,7 +65,9 @@ def _send_verification_email_bg(
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
+@limiter.limit("5/minute")  # ★ Audit 2026-05-23: anti-spam registrazioni
 def register(
+    request: Request,
     data: UserRegisterRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -92,7 +95,8 @@ def register(
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: UserLoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")  # ★ Audit 2026-05-23: anti brute-force credenziali
+def login(request: Request, data: UserLoginRequest, db: Session = Depends(get_db)):
     """Login. Solleva 403 EmailNotVerifiedException se l'utente non ha
     ancora confermato l'email — il frontend deve mostrare il pulsante
     "reinvia email di verifica".
@@ -124,7 +128,9 @@ def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/resend-verification", status_code=200)
+@limiter.limit("3/minute")  # ★ Audit 2026-05-23: anti-spam mail verifica (extra layer)
 def resend_verification(
+    request: Request,
     data: ResendVerificationRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -150,7 +156,9 @@ def resend_verification(
 
 
 @router.post("/forgot-password", status_code=200)
+@limiter.limit("3/minute")  # ★ Audit 2026-05-23: anti-spam reset password
 def forgot_password(
+    request: Request,
     data: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),

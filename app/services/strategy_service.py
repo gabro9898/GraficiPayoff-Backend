@@ -109,6 +109,7 @@ class StrategyService:
             trading_class=getattr(leg, 'trading_class', None),
             commission=getattr(leg, 'commission', 0.0) or 0.0,
             open_date=getattr(leg, 'open_date', None) or datetime.now(timezone.utc),
+            underlying_price=getattr(leg, 'underlying_price', None),
             delta=leg.delta,
             gamma=leg.gamma,
             theta=leg.theta,
@@ -677,6 +678,7 @@ class StrategyService:
         leg.premium = data.premium
         leg.commission = data.commission
         leg.open_date = datetime.now(timezone.utc)
+        leg.underlying_price = getattr(data, 'underlying_price', None)
         leg.delta = data.delta
         leg.gamma = data.gamma
         leg.theta = data.theta

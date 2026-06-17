@@ -6,7 +6,11 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from app.config import get_settings
+from app.utils.rate_limit import limiter
 from app.database import engine, Base, SessionLocal
 from app.api.routes import auth_router, user_router, strategy_router, trade_router
 from app.api.routes.account import router as account_router
@@ -17,6 +21,7 @@ from app.api.routes.stripe import router as stripe_router
 from app.api.routes.gex import router as gex_router  # ★ GEX
 from app.api.routes.contact import router as contact_router  # ★ Chat contatto
 from app.api.routes.strategy_template import router as strategy_template_router  # ★ Preset strategia
+from app.api.routes.one_import import router as one_import_router  # ★ Import ONE
 
 # ★ Import dei modelli per registrarli sul Base.metadata
 # (se non vengono importati da qualche parte, create_all non li vede)
@@ -32,6 +37,18 @@ from app.services.gex_scheduler import GexScheduler
 from app.services.subscription_scheduler import SubscriptionScheduler  # ★ Subscription scheduler
 
 settings = get_settings()
+
+# ★ Sicurezza (audit 2026-05-23): rifiuta di partire se il SECRET_KEY è il
+# placeholder o è vuoto. Quel valore è documentato pubblicamente nei tutorial
+# FastAPI e renderebbe forgiabile qualsiasi token JWT (impersonificazione
+# di QUALSIASI utente). Fail-fast all'import del modulo.
+_PLACEHOLDER_SECRET = "your-super-secret-key-change-in-production"
+if not settings.SECRET_KEY or settings.SECRET_KEY == _PLACEHOLDER_SECRET:
+    raise RuntimeError(
+        "SECRET_KEY è vuoto o impostato sul placeholder. "
+        "Imposta SECRET_KEY=<chiave casuale> nel .env "
+        "(es. `python -c \"import secrets;print(secrets.token_hex(64))\"`)."
+    )
 
 
 def seed_app_settings():
@@ -73,6 +90,10 @@ def ensure_schema_columns():
         # viene comunque sovrascritto a FALSE dal default Python del modello.
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN NOT NULL DEFAULT FALSE",
+        # ★ Audit 2026-05-23: indice su token_hash per la verify_email O(1).
+        # Prima era O(N) con scan + bcrypt-verify su ogni token attivo,
+        # vulnerabile a DoS CPU con richieste fittizie a /auth/verify-email.
+        "CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_token_hash ON email_verification_tokens (token_hash)",
     ]
     with engine.begin() as conn:
         for stmt in statements:
@@ -170,6 +191,13 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
     )
 
+    # ★ Rate limit setup (slowapi) — audit 2026-05-23.
+    # Il limiter vive in app.utils.rate_limit per evitare circular import
+    # con i router che lo applicano. I limiti specifici sono nei decoratori
+    # @limiter.limit("X/minute") sui singoli endpoint (vedi auth.py).
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.ALLOWED_ORIGINS.split(","),
@@ -190,6 +218,7 @@ def create_app() -> FastAPI:
     app.include_router(gex_router, prefix="/api/v1")  # ★ GEX
     app.include_router(contact_router, prefix="/api/v1")  # ★ Chat contatto
     app.include_router(strategy_template_router, prefix="/api/v1")  # ★ Preset strategia
+    app.include_router(one_import_router, prefix="/api/v1")  # ★ Import ONE
 
     # ★ Subscription scheduler: tenuto in chiusura nel scope di create_app
     # così l'handler di shutdown lo trova.

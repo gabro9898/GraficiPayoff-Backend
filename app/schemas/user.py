@@ -35,7 +35,10 @@ class UserLoginRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     first_name: str | None = Field(None, min_length=1, max_length=100)
     last_name: str | None = Field(None, min_length=1, max_length=100)
-    subscription_expiry: datetime | None = None
+    # NB: subscription_expiry NON è modificabile dall'utente — è gestita
+    # server-side dal webhook Stripe (checkout.session.completed). Audit
+    # 2026-05-23: rimosso per chiudere mass-assignment (un utente loggato
+    # poteva auto-regalarsi un abbonamento a vita via PATCH /users/me).
 
 
 # --- Response schemas ---

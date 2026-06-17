@@ -27,6 +27,9 @@ class StrategyLegInput(BaseModel):
     trading_class: str | None = None
     commission: float = Field(default=0.0, ge=0)
     open_date: datetime | None = None
+    # Prezzo del sottostante al momento del fill: serve a piazzare subito il
+    # pallino di entrata sul grafico (entryUnderlyingPrice lato frontend).
+    underlying_price: float | None = None
     delta: float | None = None
     gamma: float | None = None
     theta: float | None = None
@@ -206,6 +209,8 @@ class StrategyFillPendingLegRequest(BaseModel):
     fill_price: float | None = None
     premium: float = Field(ge=0)
     commission: float = Field(default=0.0, ge=0)
+    # Spot al momento del fill: il pallino di entrata si piazza subito al punto giusto.
+    underlying_price: float | None = None
     delta: float | None = None
     gamma: float | None = None
     theta: float | None = None

@@ -16,3 +16,4 @@ httpx
 cryptography
 stripe
 apscheduler
+slowapi

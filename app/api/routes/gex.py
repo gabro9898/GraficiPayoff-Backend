@@ -75,12 +75,16 @@ def get_all_chains(
     return controller.get_all_chains(ticker)
 
 
-# ★ v3: trigger manuale del refresh GEX — route di emergenza, SENZA AUTH
-# Endpoint pubblico volutamente: serve a forzare il refresh al volo senza
-# dover prendere un token. Se il backend è esposto pubblicamente, valuta
-# l'aggiunta di un secret in header (es. X-Refresh-Secret).
+# ★ v3: trigger manuale del refresh GEX.
+# Audit 2026-05-23: in origine era pubblico per comodità ("route di emergenza"),
+# ma esponeva la quota Polygon a un DoS gratuito (chiunque, senza account,
+# poteva mandarla in loop). Ora richiede auth + abbonamento attivo, in linea
+# con gli altri endpoint /gex/*.
 @router.post("/refresh/{ticker}", status_code=202)
-async def trigger_manual_refresh(ticker: str):
+async def trigger_manual_refresh(
+    ticker: str,
+    current_user: User = Depends(get_current_user),
+):
     """
     Forza un refresh manuale del GEX per il ticker indicato.
     Background: loop di retry ogni 60s fino al successo o al cutoff orario.
@@ -92,6 +96,7 @@ async def trigger_manual_refresh(ticker: str):
       - "unknown_ticker"   → ticker non configurato in GEX_TICKERS
       - "disabled"         → scheduler disattivato o POLYGON_API_KEY mancante
     """
+    _require_active_subscription(current_user)
     scheduler = gex_scheduler_module.gex_scheduler
     if scheduler is None:
         raise HTTPException(status_code=503, detail="GEX scheduler non inizializzato")

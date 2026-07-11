@@ -2,6 +2,7 @@
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/models/user_preference.py
 # v5: + strike_mode
+# v6: + font_scale (scala font UI utente, default 1.0)
 # ============================================================
 
 import uuid
@@ -40,6 +41,9 @@ class UserPreference(Base):
 
     # ★ v5: Strike mode (all-fast, all-normal, 32, 24, 16, 8, 4, 2)
     strike_mode: Mapped[str] = mapped_column(String(20), default="all-fast", nullable=False)
+
+    # ★ v6: Scala font UI utente (1.0 = default; range applicativo 0.7–1.5)
+    font_scale: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

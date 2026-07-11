@@ -2,6 +2,7 @@
 # ★ BACKEND — FILE AGGIORNATO
 # Percorso: app/schemas/user_preference.py
 # v5: + strike_mode
+# v6: + font_scale
 # ============================================================
 
 from datetime import datetime
@@ -19,6 +20,7 @@ class PreferenceUpdateRequest(BaseModel):
     theme: str | None = Field(None, min_length=1, max_length=32)
     broker: str | None = Field(None, min_length=1, max_length=32)
     strike_mode: str | None = Field(None, min_length=1, max_length=20)  # ★ v5
+    font_scale: float | None = Field(None, ge=0.5, le=3.0)  # ★ v6 (app clampa 0.7–1.5)
 
 
 class PreferenceResponse(BaseModel):
@@ -34,6 +36,7 @@ class PreferenceResponse(BaseModel):
     theme: str
     broker: str
     strike_mode: str  # ★ v5
+    font_scale: float  # ★ v6
     created_at: datetime
     updated_at: datetime
 

@@ -94,6 +94,9 @@ def ensure_schema_columns():
         # Prima era O(N) con scan + bcrypt-verify su ogni token attivo,
         # vulnerabile a DoS CPU con richieste fittizie a /auth/verify-email.
         "CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_token_hash ON email_verification_tokens (token_hash)",
+        # ★ v6: scala font UI utente su user_preferences (create_all non altera
+        #   tabelle già esistenti). Default 1.0 = nessuna modifica per chi non tocca.
+        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS font_scale DOUBLE PRECISION NOT NULL DEFAULT 1.0",
     ]
     with engine.begin() as conn:
         for stmt in statements:

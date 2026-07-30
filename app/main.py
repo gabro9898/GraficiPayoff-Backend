@@ -22,6 +22,7 @@ from app.api.routes.gex import router as gex_router  # ★ GEX
 from app.api.routes.contact import router as contact_router  # ★ Chat contatto
 from app.api.routes.strategy_template import router as strategy_template_router  # ★ Preset strategia
 from app.api.routes.one_import import router as one_import_router  # ★ Import ONE
+from app.api.routes.ai import router as ai_router  # ★ Relay assistente IA
 
 # ★ Import dei modelli per registrarli sul Base.metadata
 # (se non vengono importati da qualche parte, create_all non li vede)
@@ -31,6 +32,7 @@ from app.models import subscription_reminder_log  # noqa: F401
 from app.models import email_verification  # noqa: F401
 from app.models import oauth_state  # noqa: F401  ★ Trusted Partner OAuth: state CSRF persistito
 from app.models import strategy_template  # noqa: F401  ★ Preset strategia precompilati
+from app.models import ai_credential  # noqa: F401  ★ Chiavi IA cifrate (create_all deve vederla)
 
 from app.services import gex_scheduler as gex_scheduler_module  # ★ GEX scheduler
 from app.services.gex_scheduler import GexScheduler
@@ -222,6 +224,10 @@ def create_app() -> FastAPI:
     app.include_router(contact_router, prefix="/api/v1")  # ★ Chat contatto
     app.include_router(strategy_template_router, prefix="/api/v1")  # ★ Preset strategia
     app.include_router(one_import_router, prefix="/api/v1")  # ★ Import ONE
+    # ★ Relay assistente IA — deve stare sotto lo STESSO prefisso degli altri:
+    #   il frontend chiama `${VITE_API_URL}/ai/chat` e VITE_API_URL vale
+    #   `https://.../api/v1` (src/services/ai/transport.ts:56-76).
+    app.include_router(ai_router, prefix="/api/v1")
 
     # ★ Subscription scheduler: tenuto in chiusura nel scope di create_app
     # così l'handler di shutdown lo trova.

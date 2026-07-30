@@ -66,6 +66,27 @@ class Settings(BaseSettings):
     # Il link finale sarà: {LANDING_URL}/verify-email?token=...
     LANDING_URL: str = "https://optiontracker.optiontraders.it"
 
+    # ★ Assistente IA — relay verso i fornitori di modelli
+    #   (rotte in app/api/routes/ai.py, inoltro in app/services/ai_relay.py)
+    #
+    # Interruttore generale: a False le rotte /ai/chat e /ai/count-tokens
+    # rispondono 503 con un messaggio esplicito. /ai/health continua a
+    # rispondere, così il frontend distingue "relay spento" da "relay assente".
+    AI_RELAY_ENABLED: bool = True
+    # Chiave Fernet usata per cifrare A RIPOSO le chiavi dei fornitori.
+    # DEFAULT VUOTO DI PROPOSITO: non è un segreto vero e non deve esserlo.
+    # Finché resta vuoto, /ai/credential fallisce con 503 e un messaggio che
+    # dice cosa manca — mai una cifratura con chiave effimera, che sparirebbe
+    # al riavvio lasciando in tabella ciphertext indecifrabili.
+    # Generare con: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    AI_ENCRYPTION_KEY: str = ""
+    # Tetto per utente sulle chiamate al relay (sintassi slowapi/limits).
+    AI_RELAY_RATE_LIMIT: str = "30/minute"
+    # Silenzio massimo tollerato dal fornitore fra due pezzi dello stream.
+    # Il frontend si arrende a 90 s (AI_STREAM_IDLE_TIMEOUT_MS): qui sta più
+    # largo, così a chiudere è il client e non il relay.
+    AI_RELAY_READ_TIMEOUT_SECONDS: float = 120.0
+
     @property
     def tastytrade_base_url(self) -> str:
         if self.TASTYTRADE_SANDBOX:

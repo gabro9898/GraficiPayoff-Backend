@@ -97,3 +97,50 @@ class SubscriptionExpiredException(AppException):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your subscription has expired",
         )
+
+
+# --- Broker / servizi esterni ---
+
+class TastyTradeApiException(AppException):
+    """TastyTrade ha risposto con un errore alla nostra chiamata.
+
+    Serve a portare fino al client il MOTIVO vero del rifiuto (buying power
+    insufficiente, simbolo inesistente, prezzo fuori tick). Prima al suo posto
+    c'era una `Exception` nuda: FastAPI la trasformava in un 500 generato dal
+    ServerErrorMiddleware, che sta FUORI dal CORS middleware — quindi la
+    risposta arrivava al browser senza header CORS e in testo semplice, e il
+    frontend non vedeva nemmeno un 500, ma un errore di rete con `response`
+    indefinita. Il messaggio di TastyTrade spariva per strada.
+
+    Lo status di TastyTrade NON viene propagato alla lettera:
+
+      * 401 → il frontend ha un interceptor globale che lo legge come "sessione
+        dell'app scaduta": rinnova il JWT, RIESEGUE la richiesta (su un ordine
+        significherebbe inviarlo due volte) e, se il rinnovo fallisce, cancella
+        i token buttando l'utente fuori dall'applicazione.
+      * 403 → su GET /tastytrade/accounts il frontend lo interpreta come
+        "grant TastyTrade revocato" e riapre da solo la popup OAuth: un 403 di
+        permessi diventerebbe un giro di ri-autorizzazioni che non risolve.
+
+    Tutto ciò che non è un errore di richiesta "pulito" diventa quindi 502 Bad
+    Gateway — che è anche la verità tecnica: un servizio a monte ha risposto
+    male. 502 è già la scelta del progetto per questi casi (app_info.py).
+    """
+
+    # Status che descrivono un problema della RICHIESTA e che il frontend può
+    # ricevere senza effetti collaterali (verificato punto per punto sui
+    # chiamanti). Tutti gli altri vengono rimappati su 502.
+    STATUS_PROPAGABILI = frozenset({400, 404, 409, 422})
+
+    def __init__(self, upstream_status: int, detail: str):
+        super().__init__(
+            status_code=(
+                upstream_status
+                if upstream_status in self.STATUS_PROPAGABILI
+                else status.HTTP_502_BAD_GATEWAY
+            ),
+            detail=detail,
+        )
+        # Lo status originale resta leggibile per i log, anche quando quello
+        # HTTP esposto è stato rimappato a 502.
+        self.upstream_status = upstream_status

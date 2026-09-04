@@ -20,7 +20,11 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "Option Tracker"
-    DEBUG: bool = True
+    # NB: qui c'era un campo DEBUG mai letto da nessuno — una manopola finta.
+    # Rimosso: il backend non ha una configurazione del logging da governare
+    # (nessun basicConfig, nessun log_level), quindi non c'era niente a cui
+    # collegarlo. La riga DEBUG=true eventualmente rimasta nei .env viene
+    # ignorata senza errori grazie a extra="ignore" (vedi class Config).
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173,app://."
 
     # TastyTrade OAuth2

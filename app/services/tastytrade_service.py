@@ -19,9 +19,48 @@ from app.config import get_settings
 from app.repositories.broker_token_repository import BrokerTokenRepository
 from app.repositories.oauth_state_repository import OAuthStateRepository
 from app.utils.encryption import encrypt_token, decrypt_token
-from app.utils.exceptions import ForbiddenException
+from app.utils.exceptions import ForbiddenException, TastyTradeApiException
 
 BROKER_ID = "tastytrade"
+
+# Lunghezza massima del messaggio di errore riportato al client: il corpo di TT
+# puo' contenere un elenco lungo di validazioni, e finisce dentro un JSON.
+_MAX_DETAIL = 500
+
+
+def _tastytrade_error_detail(resp: httpx.Response) -> str:
+    """Il motivo del rifiuto, in forma leggibile, dalla risposta di TastyTrade.
+
+    TT risponde con {"error": {"code": ..., "message": ..., "errors": [...]}}.
+    Si prende `message`, aggiungendo le voci di `errors` quando ci sono (e' li'
+    che finiscono i dettagli utili tipo "price must be a multiple of 0.05").
+    Se il corpo non e' JSON — pagina HTML di un gateway, risposta vuota — si
+    ripiega sul testo grezzo, che e' comunque meglio di niente.
+    """
+    try:
+        body = resp.json()
+    except Exception:
+        body = None
+
+    messaggio = None
+    if isinstance(body, dict):
+        errore = body.get("error")
+        if isinstance(errore, dict):
+            messaggio = errore.get("message")
+            voci = errore.get("errors")
+            if isinstance(voci, list):
+                dettagli = [
+                    v.get("message") for v in voci
+                    if isinstance(v, dict) and v.get("message")
+                ]
+                if dettagli:
+                    unito = "; ".join(dettagli)
+                    messaggio = f"{messaggio}: {unito}" if messaggio else unito
+
+    if not messaggio:
+        messaggio = (resp.text or "").strip() or "nessun dettaglio nella risposta"
+
+    return f"TastyTrade API error {resp.status_code}: {messaggio}"[:_MAX_DETAIL]
 
 # ★ Lock per user_id sul refresh token. Evita che chiamate API parallele dello
 # stesso utente scatenino N refresh simultanei: TT invalida il refresh_token
@@ -323,7 +362,17 @@ class TastyTradeService:
                 headers["Authorization"] = f"Bearer {new_token}"
                 resp = await client.request(method, url, headers=headers, params=params, json=json_body)
             if resp.status_code >= 400:
-                raise Exception(f"TastyTrade API error {resp.status_code}: {resp.text[:500]}")
+                # ★ HTTPException, non Exception nuda: cosi' la risposta passa
+                #   dall'ExceptionMiddleware (che sta DENTRO il CORS middleware)
+                #   e arriva al client come JSON {"detail": ...} leggibile,
+                #   invece che come 500 in testo semplice senza header CORS —
+                #   che il browser scarta come errore di rete.
+                #   Lo status esposto NON e' sempre quello di TT: vedi la
+                #   docstring di TastyTradeApiException (401 e 403 hanno un
+                #   significato per il frontend e vanno rimappati su 502).
+                raise TastyTradeApiException(
+                    resp.status_code, _tastytrade_error_detail(resp)
+                )
             return resp.json()
 
     async def get_accounts(self, user_id: str) -> list[dict]:
